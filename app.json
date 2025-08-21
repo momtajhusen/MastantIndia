@@ -1,29 +1,36 @@
 {
   "expo": {
-    "name": "MastantIndia",
+    "name": "Mastant India",
     "slug": "MastantIndia",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./src/assets/images/Applogo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#000000"
     },
     "ios": {
       "supportsTablet": true
     },
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
-      "edgeToEdgeEnabled": true
+    "extra": {
+      "eas": {
+        "projectId": "5f4adcab-6982-4866-a4e1-55119fa31cf6"
+      }
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    }
+    "owner": "mumtaz666raza",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/5f4adcab-6982-4866-a4e1-55119fa31cf6"
+    },
+    "android": {
+      "package": "com.mumtaz666raza.MastantIndia"
+    },
+    "plugins": [
+      "expo-font"
+    ]
   }
 }

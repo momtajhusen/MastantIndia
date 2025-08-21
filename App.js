@@ -1,20 +1,39 @@
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import * as SplashScreen from 'expo-splash-screen';
+import { NavigationContainer } from '@react-navigation/native';
+import StackNavigation from './src/navigation/StackNavigation';
+import { AppProvider } from './src/context/AppContext';
+import { MenuProvider } from 'react-native-popup-menu';
+import { useFonts } from 'expo-font';
+import AppLoading from 'expo-app-loading';
 
-export default function App() {
+// prevent auto hide
+SplashScreen.preventAutoHideAsync();
+
+const App = () => {
+  const [fontsLoaded] = useFonts({
+    Afacad: require('./src/assets/fonts/Afacad/Afacad-VariableFont_wght.ttf'),
+  });
+
+  useEffect(() => {
+    if (fontsLoaded) {
+      SplashScreen.hideAsync();
+    }
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) {
+    return <AppLoading />; // ya null bhi return kar sakte ho
+  }
+
   return (
-    <View style={styles.container}>
-      <Text>Open up App.js to start working on your app!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <MenuProvider>
+      <AppProvider>
+        <NavigationContainer>
+          <StackNavigation />
+        </NavigationContainer>
+      </AppProvider>
+    </MenuProvider>
   );
-}
+};
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
+export default App;
