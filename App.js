@@ -6,6 +6,7 @@ import { AppProvider } from './src/context/AppContext';
 import { MenuProvider } from 'react-native-popup-menu';
 import { useFonts } from 'expo-font';
 import AppLoading from 'expo-app-loading';
+import { StatusBar } from 'react-native'; // 👈 import StatusBar
 
 // prevent auto hide
 SplashScreen.preventAutoHideAsync();
@@ -29,6 +30,8 @@ const App = () => {
     <MenuProvider>
       <AppProvider>
         <NavigationContainer>
+          {/* 👇 yaha black status bar set kar diya */}
+          <StatusBar backgroundColor="black" barStyle="light-content" />
           <StackNavigation />
         </NavigationContainer>
       </AppProvider>

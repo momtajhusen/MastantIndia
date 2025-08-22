@@ -1,22 +1,19 @@
 import React, { useEffect, useContext } from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { View, Text, Pressable, Image } from 'react-native';
-
- 
-import CategoryScreen from '../screens/CommonScreen/CategorysScreen';
-import { rw, rh, rf } from '../Service/responsive';
+import { Pressable } from 'react-native';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import { rw, rh, rf } from '../constants/responsive';
 import { AppContext } from '../context/AppContext';
-import { useViewCartData } from '../utility/viewCardDataUtils';
+
+// Dummy screens (replace later with actual screens)
+import CustomerHomeScreen from '../screens/Customer/Dashboard/CustomerHomeScreen';
+import CustomerProfileScreen from '../screens/Customer/Profile/CustomerProfileScreen';
+import BookingHistoryScreen from '../screens/Customer/Profile/BookingHistoryScreen';
 
 const Tab = createBottomTabNavigator();
 
-
 const CustomerBottomTabNavigator = () => {
   const { state, dispatch } = useContext(AppContext);
-
-  const cartCount = state.viewCartData?.cartProduct?.length ?? 0;
-
-  const { isViewCartLoading, viewCartData } = useViewCartData();
 
   const fetchCartDetails = async () => {
     await viewCartData();
@@ -29,9 +26,10 @@ const CustomerBottomTabNavigator = () => {
   return (
     <Tab.Navigator
       lazy={true}
-      screenOptions={({ route }) => ({
-        tabBarActiveTintColor: "#FF3131",
-        tabBarInactiveTintColor: "#6C6C6C",
+      screenOptions={{
+        tabBarShowLabel: false, // ✅ hide labels
+        tabBarActiveTintColor: "#000000", // ✅ active = black
+        tabBarInactiveTintColor: "#757575", // ✅ inactive = grey
         tabBarStyle: {
           backgroundColor: "white",
           height: rh(10),
@@ -39,70 +37,69 @@ const CustomerBottomTabNavigator = () => {
           borderTopWidth: 0,
           paddingBottom: rh(1),
         },
-        tabBarLabelStyle: {
-          fontSize: rf(1.5),
-          paddingBottom: rh(1.5),
-          fontWeight: 'bold',
-        },
-        tabBarIconStyle: {
-          marginBottom: 2,
-        },
         headerShown: false,
-      })}
+      }}
     >
+      {/* Home */}
       <Tab.Screen
         name="Home"
-        component={HomeScreen}
+        component={CustomerHomeScreen}
         options={{
-          tabBarLabel: 'Home',
-          tabBarIcon: ({ focused }) => (
-            focused ? (
-              <Image
-                source={require('../assets/navigation-icon/home-1.png')}
-                resizeMode="cover"
-                style={{ width: rf(3.5), height: rf(3.5) }}
-              />
-            ) : (
-              <Image
-                source={require('../assets/navigation-icon/home-2.png')}
-                resizeMode="cover"
-                style={{ width: rf(3.5), height: rf(3.5) }}
-              />
-            )
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="home-outline" size={rf(3.5)} color={color} />
           ),
-          tabBarButton: (props) => (
-            <Pressable {...props} android_ripple={null} />
-          ),
+          tabBarButton: (props) => <Pressable {...props} android_ripple={null} />,
         }}
       />
 
+      {/* Calendar */}
       <Tab.Screen
-        name="Category"
-        component={CategoryScreen}
+        name="Calendar"
+        component={CustomerHomeScreen}
         options={{
-          tabBarLabel: 'Category',
-          tabBarIcon: ({ focused }) => (
-            focused ? (
-              <Image
-                source={require('../assets/navigation-icon/category-1.png')}
-                resizeMode="cover"
-                style={{ width: rf(3.5), height: rf(3.5) }}
-              />
-            ) : (
-              <Image
-                source={require('../assets/navigation-icon/category-2.png')}
-                resizeMode="cover"
-                style={{ width: rf(3.5), height: rf(3.5) }}
-              />
-            )
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="calendar-outline" size={rf(3.5)} color={color} />
           ),
-          tabBarButton: (props) => (
-            <Pressable {...props} android_ripple={null} />
-          ),
+          tabBarButton: (props) => <Pressable {...props} android_ripple={null} />,
         }}
       />
 
-      
+      {/* Cart */}
+      <Tab.Screen
+        name="Cart"
+        component={CustomerHomeScreen}
+        options={{
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="cart-outline" size={rf(3.5)} color={color} />
+          ),
+          tabBarButton: (props) => <Pressable {...props} android_ripple={null} />,
+        }}
+      />
+
+      {/* History */}
+      <Tab.Screen
+        name="History"
+        component={BookingHistoryScreen}
+        options={{
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="time-outline" size={rf(3.5)} color={color} />
+          ),
+          tabBarButton: (props) => <Pressable {...props} android_ripple={null} />,
+        }}
+      />
+
+      {/* Profile */}
+      <Tab.Screen
+        name="Profile"
+        component={CustomerProfileScreen}
+        options={{
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="person-outline" size={rf(3.5)} color={color} />
+          ),
+          tabBarButton: (props) => <Pressable {...props} android_ripple={null} />,
+        }}
+      />
+
     </Tab.Navigator>
   );
 };

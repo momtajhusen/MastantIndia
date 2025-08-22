@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Mastant India",
-    "slug": "MastantIndia",
+    "slug": "mastant-india",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./src/assets/images/Applogo.png",
@@ -16,15 +16,15 @@
     },
     "extra": {
       "eas": {
-        "projectId": "5f4adcab-6982-4866-a4e1-55119fa31cf6"
+        "projectId": "d8080b8f-2fc8-4997-afb7-adbc432a1768"
       }
     },
-    "owner": "mumtaz666raza",
+    "owner": "codeprou",
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/5f4adcab-6982-4866-a4e1-55119fa31cf6"
+      "url": "https://u.expo.dev/d8080b8f-2fc8-4997-afb7-adbc432a1768"
     },
     "android": {
       "package": "com.mumtaz666raza.MastantIndia"

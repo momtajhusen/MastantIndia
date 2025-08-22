@@ -1,8 +1,9 @@
 //import liraries
 import React, { useContext } from 'react';
-// import CustomerBottomTabNavigator from './CustomerBottomTabNavigator';
+import CustomerBottomTabNavigator from './CustomerBottomTabNavigator';
 import SplashScreen from '../screens/Auth/SplashScreen';
 import LoginScreen from '../screens/Auth/LoginScreen';
+import OTPVerificationScreen from '../screens/Auth/OTPVerificationScreen';
  
 
 import { createSharedElementStackNavigator } from 'react-navigation-shared-element';
@@ -18,6 +19,10 @@ const StackNavigation = () => {
  
         {/* Auth navigation  */}
         <Stack.Screen name="LoginScreen" component={LoginScreen} options={{ headerShown: false, animation: 'fade' }} />
+        <Stack.Screen name="OTPVerificationScreen" component={OTPVerificationScreen} options={{ headerShown: false, animation: 'fade' }} />
+
+        <Stack.Screen name="CustomerBottomTabNavigator" component={CustomerBottomTabNavigator} options={{ headerShown: false, animation: 'fade' }} />
+
  
  
      </Stack.Navigator>
