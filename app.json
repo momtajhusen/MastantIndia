@@ -7,24 +7,26 @@
     "icon": "./src/assets/images/Applogo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.mumtaz666raza.MastantIndia"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "d8080b8f-2fc8-4997-afb7-adbc432a1768"
-      }
-    },
-    "owner": "codeprou",
+    "owner": "momtajlife",
     "runtimeVersion": {
       "policy": "appVersion"
     },
     "updates": {
-      "url": "https://u.expo.dev/d8080b8f-2fc8-4997-afb7-adbc432a1768"
+      "url": "https://u.expo.dev/457ec4cd-a631-4507-bee3-3076cffdae80",
+      "fallbackToCacheTimeout": 0
+    },
+    "extra": {
+      "eas": {
+        "projectId": "457ec4cd-a631-4507-bee3-3076cffdae80"
+      }
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mumtaz666raza.MastantIndia"
     },
     "android": {
-      "package": "com.mumtaz666raza.MastantIndia"
+      "package": "com.mumtaz666raza.MastantIndia",
+      "versionCode": 1
     },
     "plugins": [
       "expo-font",
