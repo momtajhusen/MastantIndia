@@ -7,8 +7,11 @@ import { AppContext } from '../context/AppContext';
 
 // Dummy screens (replace later with actual screens)
 import CustomerHomeScreen from '../screens/Customer/Dashboard/CustomerHomeScreen';
+import CalendarScreen from '../screens/Customer/Booking/CalendarScreen';
+import CartScreen from '../screens/Customer/Booking/CartScreen';
 import CustomerProfileScreen from '../screens/Customer/Profile/CustomerProfileScreen';
 import BookingHistoryScreen from '../screens/Customer/Profile/BookingHistoryScreen';
+
 
 const Tab = createBottomTabNavigator();
 
@@ -55,7 +58,7 @@ const CustomerBottomTabNavigator = () => {
       {/* Calendar */}
       <Tab.Screen
         name="Calendar"
-        component={CustomerHomeScreen}
+        component={CalendarScreen}
         options={{
           tabBarIcon: ({ color }) => (
             <Ionicons name="calendar-outline" size={rf(3.5)} color={color} />
@@ -67,7 +70,7 @@ const CustomerBottomTabNavigator = () => {
       {/* Cart */}
       <Tab.Screen
         name="Cart"
-        component={CustomerHomeScreen}
+        component={CartScreen}
         options={{
           tabBarIcon: ({ color }) => (
             <Ionicons name="cart-outline" size={rf(3.5)} color={color} />
