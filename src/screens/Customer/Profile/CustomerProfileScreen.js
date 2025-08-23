@@ -6,30 +6,34 @@ import {
   StyleSheet, 
   Image, 
   TouchableOpacity, 
-  ScrollView,
-  SafeAreaView 
+  ScrollView 
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import { SafeAreaView } from 'react-native-safe-area-context';  
+import { rw , rh } from '../../../constants/responsive';
+import { useNavigation } from '@react-navigation/native';
 
 // create a component
 const CustomerProfileScreen = () => {
+    const navigation = useNavigation();
+
     return (
-        <SafeAreaView style={styles.container}>
+        <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
             {/* Header Section */}
             <View style={styles.header}>
-                <View style={styles.profileSection}>
-                    <Image 
-                        source={{ uri: 'https://via.placeholder.com/60x60' }} 
+               <View style={styles.profileSection}>
+                    <Image
+                        source={require('../../../assets/images/profile.png')}
                         style={styles.profileImage}
                     />
-                    <View style={styles.profileInfo}>
-                        <Text style={styles.name}>Preeti Yadav</Text>
-                        <Text style={styles.phone}>+91 9315352806</Text>
+                    <View>
+                        <Text style={{color:'white', fontWeight:500}}>Preeti Yadav</Text>
+                        <Text style={{color:'white'}}>+91 93153352806</Text>
                     </View>
-                </View>
-                <TouchableOpacity style={styles.supportButton}>
-                    <Text style={styles.supportButtonText}>help & support</Text>
-                </TouchableOpacity>
+               </View>
+               <TouchableOpacity style={styles.helpsupport}>
+                 <Text style={{color:'white', fontSize:14, fontWeight:'bold'}}>help & support</Text>
+               </TouchableOpacity>
             </View>
 
             <ScrollView style={styles.content}>
@@ -60,25 +64,25 @@ const CustomerProfileScreen = () => {
 
                 {/* Menu Items */}
                 <View style={styles.menuContainer}>
-                    <TouchableOpacity style={styles.menuItem}>
+                    <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('AddressBookScreen')}>
                         <Ionicons name="book-outline" size={22} color="#555" style={styles.menuIcon} />
                         <Text style={styles.menuText}>Address Book</Text>
                         <Ionicons name="chevron-forward" size={18} color="#ccc" />
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.menuItem}>
+                    <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('PaymentMethodScreen')}>
                         <Ionicons name="card-outline" size={22} color="#555" style={styles.menuIcon} />
                         <Text style={styles.menuText}>Manage Payment Methods</Text>
                         <Ionicons name="chevron-forward" size={18} color="#ccc" />
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.menuItem}>
+                    <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('RatingScreen')}>
                         <Ionicons name="star-outline" size={22} color="#555" style={styles.menuIcon} />
                         <Text style={styles.menuText}>My Ratings</Text>
                         <Ionicons name="chevron-forward" size={18} color="#ccc" />
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.menuItem}>
+                    <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('PrivacyPolicyScreen')}>
                         <Ionicons name="shield-checkmark-outline" size={22} color="#555" style={styles.menuIcon} />
                         <Text style={styles.menuText}>Privacy and data</Text>
                         <Ionicons name="chevron-forward" size={18} color="#ccc" />
@@ -114,20 +118,27 @@ const styles = StyleSheet.create({
         backgroundColor: 'white',
     },
     header: {
-        backgroundColor: '#000',
-        paddingHorizontal: 20,
-        paddingVertical: 15,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
+        height:rh(10),
+        paddingHorizontal:rw(5),
+        flexDirection:'row',
+        alignItems:'center',
+        justifyContent:'space-between',
+        backgroundColor:'black',
     },
     profileSection: {
         flexDirection: 'row',
         alignItems: 'center',
     },
+    helpsupport: {
+      borderWidth:2,
+      borderColor:'white',
+      paddingHorizontal:13,
+      paddingVertical:6,
+      borderRadius:100
+    },
     profileImage: {
-        width: 60,
-        height: 60,
+        width: 50,
+        height: 50,
         borderRadius: 30,
         marginRight: 15,
     },
@@ -138,7 +149,6 @@ const styles = StyleSheet.create({
         color: '#fff',
         fontSize: 18,
         fontWeight: '600',
-        marginBottom: 2,
     },
     phone: {
         color: '#ccc',
@@ -171,11 +181,8 @@ const styles = StyleSheet.create({
         padding: 20,
         width: '48%',
         alignItems: 'center',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3.84,
-        elevation: 5,
+        borderWidth:1,
+        borderColor:'#ddd'
     },
     cardTitle: {
         fontSize: 16,
@@ -193,6 +200,11 @@ const styles = StyleSheet.create({
         paddingHorizontal: 15,
         paddingVertical: 8,
         borderRadius: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3.84,
+        elevation: 5,
     },
     addAmountText: {
         fontSize: 12,
@@ -208,6 +220,11 @@ const styles = StyleSheet.create({
         paddingVertical: 8,
         borderRadius: 20,
         marginRight: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3.84,
+        elevation: 5,
     },
     activeButtonText: {
         fontSize: 12,
@@ -218,6 +235,11 @@ const styles = StyleSheet.create({
         paddingHorizontal: 15,
         paddingVertical: 8,
         borderRadius: 20,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3.84,
+        elevation: 5,
     },
     upcomingButtonText: {
         fontSize: 12,
@@ -227,11 +249,8 @@ const styles = StyleSheet.create({
         backgroundColor: '#fff',
         borderRadius: 15,
         overflow: 'hidden',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 3.84,
-        elevation: 5,
+        borderWidth:1,
+        borderColor:'#ddd'
     },
     menuItem: {
         flexDirection: 'row',

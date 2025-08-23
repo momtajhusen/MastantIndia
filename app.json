@@ -28,6 +28,9 @@
     "plugins": [
       "expo-font",
       "expo-build-properties"
-    ]
+    ],
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
   }
 }

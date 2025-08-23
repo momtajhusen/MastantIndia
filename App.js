@@ -6,6 +6,7 @@ import { AppProvider } from './src/context/AppContext';
 import { MenuProvider } from 'react-native-popup-menu';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // prevent auto hide
 SplashScreen.preventAutoHideAsync();
@@ -26,14 +27,17 @@ const App = () => {
   }
 
   return (
-    <MenuProvider>
-      <AppProvider>
-        <NavigationContainer>
-          <StatusBar backgroundColor="black" barStyle="light-content" />
-          <StackNavigation />
-        </NavigationContainer>
-      </AppProvider>
-    </MenuProvider>
+    <SafeAreaProvider>
+      {/* ✅ Global StatusBar */}
+      <StatusBar backgroundColor="#000" barStyle="light-content" />
+      <MenuProvider>
+        <AppProvider>
+          <NavigationContainer>
+            <StackNavigation />
+          </NavigationContainer>
+        </AppProvider>
+      </MenuProvider>
+    </SafeAreaProvider>
   );
 };
 
