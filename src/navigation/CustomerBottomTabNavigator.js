@@ -10,7 +10,7 @@ import CustomerHomeScreen from '../screens/Customer/Dashboard/CustomerHomeScreen
 import CalendarScreen from '../screens/Customer/Booking/CalendarScreen';
 import CartScreen from '../screens/Customer/Booking/CartScreen';
 import CustomerProfileScreen from '../screens/Customer/Profile/CustomerProfileScreen';
-import BookingHistoryScreen from '../screens/Customer/Profile/BookingHistoryScreen';
+import BookingHistoryScreen from '../screens/Customer/History/BookingHistoryScreen';
 
 
 const Tab = createBottomTabNavigator();

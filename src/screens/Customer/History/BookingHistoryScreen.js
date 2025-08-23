@@ -4,9 +4,12 @@ import {View, Text, StyleSheet, ScrollView, TouchableOpacity, Image } from 'reac
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { SafeAreaView } from 'react-native-safe-area-context'; 
 import { rw, rh, rf } from '../../../constants/responsive';
+import { useNavigation } from '@react-navigation/native';
 
 // create a component
 const BookingHistoryScreen = () => {
+    const navigation = useNavigation();
+    
     const [selectedCategory, setSelectedCategory] = useState('Embroidery');
     const [selectedTimeFilter, setSelectedTimeFilter] = useState('instant');
 
@@ -115,7 +118,7 @@ const BookingHistoryScreen = () => {
 
                 {/* History Items */}
                     {historyItems.map((item) => (
-                        <TouchableOpacity key={item.id} style={styles.historyItem}>
+                        <TouchableOpacity key={item.id} style={styles.historyItem} onPress={() => navigation.navigate('BookingDetailsScreen')}>
                             <Image
                                 source={require('../../../assets/images/user.png')}
                                 style={styles.userImages}

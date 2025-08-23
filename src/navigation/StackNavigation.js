@@ -9,6 +9,8 @@ import PaymentMethodScreen from '../screens/Customer/Payment/PaymentMethodScreen
 import RatingScreen from '../screens/Customer/Profile/RatingScreen';
 import PrivacyPolicyScreen from '../screens/Shared/PrivacyPolicyScreen';
 import AboutScreen from '../screens/Shared/AboutScreen';
+import BookingDetailsScreen from '../screens/Customer/History/BookingDetailsScreen';
+import ProviderProfileDetails from '../screens/Customer/History/ProviderProfileDetails';
  
 
 import { createSharedElementStackNavigator } from 'react-navigation-shared-element';
@@ -32,6 +34,9 @@ const StackNavigation = () => {
         <Stack.Screen name="RatingScreen" component={RatingScreen} options={{ headerShown: false, animation: 'fade' }} />
         <Stack.Screen name="PrivacyPolicyScreen" component={PrivacyPolicyScreen} options={{ headerShown: false, animation: 'fade' }} />
         <Stack.Screen name="AboutScreen" component={AboutScreen} options={{ headerShown: false, animation: 'fade' }} />
+        <Stack.Screen name="BookingDetailsScreen" component={BookingDetailsScreen} options={{ headerShown: false, animation: 'fade' }} />
+        <Stack.Screen name="ProviderProfileDetails" component={ProviderProfileDetails} options={{ headerShown: false, animation: 'fade' }} />
+
 
      </Stack.Navigator>
     );
