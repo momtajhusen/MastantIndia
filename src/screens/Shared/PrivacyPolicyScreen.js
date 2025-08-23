@@ -61,7 +61,7 @@ const styles = StyleSheet.create({
         fontSize: 16,
         lineHeight: 24,
         color: '#333',
-        marginBottom: 20,
+        marginBottom: 15,
         textAlign: 'left',
     }
 });

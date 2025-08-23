@@ -94,13 +94,13 @@ const CustomerProfileScreen = () => {
                         <Ionicons name="chevron-forward" size={18} color="#ccc" />
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.menuItem}>
+                    <TouchableOpacity style={styles.menuItem} onPress={() => navigation.navigate('AboutScreen')}>
                         <Ionicons name="information-circle-outline" size={22} color="#555" style={styles.menuIcon} />
                         <Text style={styles.menuText}>About MI</Text>
                         <Ionicons name="chevron-forward" size={18} color="#ccc" />
                     </TouchableOpacity>
 
-                    <TouchableOpacity style={styles.menuItem}>
+                    <TouchableOpacity style={styles.menuItem} onPress={() => navigation.replace('LoginScreen')}>
                         <Ionicons name="log-out-outline" size={22} color="#555" style={styles.menuIcon} />
                         <Text style={styles.menuText}>Log out</Text>
                         <Ionicons name="chevron-forward" size={18} color="#ccc" />

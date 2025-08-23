@@ -6,7 +6,7 @@ import { View, Text, StyleSheet } from 'react-native';
 const BookingHistoryScreen = () => {
     return (
         <View style={styles.container}>
-            <Text>BookingHistoryScreen</Text>
+            <Text>HistoryScreen</Text>
         </View>
     );
 };
