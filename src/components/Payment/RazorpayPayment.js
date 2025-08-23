@@ -47,19 +47,19 @@ const RazorpayPayment = ({
         const RazorpayCheckout = require('react-native-razorpay').default;
 
         var options = {
-          description: orderDetails?.description || 'Payment for services',
-          image: orderDetails?.logo || 'https://your-domain.com/logo.png',
-          currency: orderDetails?.currency || 'INR',
-          key: orderDetails?.razorpayKey || 'rzp_test_your_key_here',
-          amount: amount * 100,
-          name: orderDetails?.businessName || 'Your Business',
-          order_id: orderDetails?.orderId,
+          description: 'Consultation Payment',
+          image: 'https://m.media-amazon.com/images/I/61L5QgPvgqL._AC_UF1000,1000_QL80_.jpg',
+          currency: 'INR',
+          key: 'rzp_test_6DTE6DQT8QAGvW', 
+          amount: amount, 
+          name: 'Acme Corp',
+          order_id: '',
           prefill: {
-            email: orderDetails?.email || 'customer@example.com',
-            contact: orderDetails?.phone || '9999999999',
-            name: orderDetails?.name || 'Customer'
+            email: 'test@example.com',
+            contact: '9123456780',
+            name: 'Test User',
           },
-          theme: { color: orderDetails?.themeColor || '#000000' }
+          theme: { color: '#F37254' },
         };
 
         RazorpayCheckout.open(options)

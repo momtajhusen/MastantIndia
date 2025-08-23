@@ -22,7 +22,7 @@ const App = () => {
   }, [fontsLoaded]);
 
   if (!fontsLoaded) {
-    return null; // 👈 AppLoading hata diya, ab null return karo
+    return null;
   }
 
   return (
