@@ -43,7 +43,7 @@ const CustomerProfileScreen = () => {
                         <Ionicons name="wallet-outline" size={32} color="#000" style={{marginBottom: 10}} />
                         <Text style={styles.cardTitle}>My Wallet</Text>
                         <Text style={styles.walletAmount}>Rs 200</Text>
-                        <TouchableOpacity style={styles.addAmountButton}>
+                        <TouchableOpacity style={styles.addAmountButton} onPress={() => navigation.navigate('PaymentMethodScreen')}>
                             <Text style={styles.addAmountText}>add amount</Text>
                         </TouchableOpacity>
                     </View>
@@ -52,12 +52,19 @@ const CustomerProfileScreen = () => {
                         <Ionicons name="calendar-outline" size={32} color="#000" style={{marginBottom: 10}} />
                         <Text style={styles.cardTitle}>My Bookings</Text>
                         <View style={styles.bookingButtons}>
-                            <TouchableOpacity style={styles.activeButton}>
-                                <Text style={styles.activeButtonText}>active</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.upcomingButton}>
-                                <Text style={styles.upcomingButtonText}>upcoming</Text>
-                            </TouchableOpacity>
+                        <TouchableOpacity 
+                            style={styles.activeButton} 
+                            onPress={() => navigation.navigate('ActiveUpcomingServices', { initialTab: 'Active' })}
+                        >
+                            <Text style={styles.activeButtonText}>Active</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity 
+                            style={styles.upcomingButton} 
+                            onPress={() => navigation.navigate('ActiveUpcomingServices', { initialTab: 'Upcoming' })}
+                        >
+                            <Text style={styles.upcomingButtonText}>Upcoming</Text>
+                        </TouchableOpacity>
                         </View>
                     </View>
                 </View>

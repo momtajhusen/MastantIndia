@@ -30,6 +30,7 @@
     "react-native-gesture-handler": "~2.24.0",
     "react-native-pager-view": "6.7.1",
     "react-native-popup-menu": "^0.18.0",
+    "react-native-qrcode-svg": "^6.3.15",
     "react-native-razorpay": "^2.3.0",
     "react-native-responsive-dimensions": "^3.1.1",
     "react-native-safe-area-context": "^5.6.1",
