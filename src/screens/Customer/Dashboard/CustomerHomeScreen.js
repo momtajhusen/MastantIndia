@@ -14,8 +14,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { rh, rw, rf } from '../../../constants/responsive';
 import ServiceDetailModal from '../../../components/Cards/ServiceDetailModal';
+import { useNavigation } from '@react-navigation/native';
 
 const CustomerHomeScreen = () => {
+  const navigation = useNavigation();
   const [modalVisible, setModalVisible] = useState(false);
   const [selectedService, setSelectedService] = useState(null);
 
@@ -70,7 +72,10 @@ const CustomerHomeScreen = () => {
             />
           <Text style={styles.headerTitle}>astant India</Text>
         </View>
-        <TouchableOpacity style={styles.cartButton}>
+        <TouchableOpacity 
+          style={styles.cartButton} 
+          onPress={() => navigation.navigate('Cart')}
+        >
           <Ionicons name="cart-outline" size={24} color="#000" />
         </TouchableOpacity>
       </View>
@@ -220,6 +225,7 @@ const styles = StyleSheet.create({
     width: '30%',
     marginBottom: 20,
     alignItems: 'center',
+
   },
   serviceImageContainer: {
     width: '100%',
@@ -231,7 +237,7 @@ const styles = StyleSheet.create({
   serviceImage: {
     width: '100%',
     height: '100%',
-    backgroundColor: '#ddd',
+    // backgroundColor: 'red',
   },
   serviceTitle: {
     fontSize: 12,

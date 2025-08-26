@@ -11,6 +11,7 @@ import CalendarScreen from '../screens/Customer/Booking/CalendarScreen';
 import CartScreen from '../screens/Customer/Booking/CartScreen';
 import CustomerProfileScreen from '../screens/Customer/Profile/CustomerProfileScreen';
 import BookingHistoryScreen from '../screens/Customer/History/BookingHistoryScreen';
+import ActiveUpcomingServices from '../screens/Customer/History/ActiveUpcoming/ActiveUpcomingServces';
 
 
 const Tab = createBottomTabNavigator();
@@ -58,7 +59,7 @@ const CustomerBottomTabNavigator = () => {
       {/* Calendar */}
       <Tab.Screen
         name="Calendar"
-        component={CalendarScreen}
+        component={ActiveUpcomingServices}
         options={{
           tabBarIcon: ({ color }) => (
             <Ionicons name="calendar-outline" size={rf(3.5)} color={color} />

@@ -12,6 +12,7 @@ import AboutScreen from '../screens/Shared/AboutScreen';
 import BookingDetailsScreen from '../screens/Customer/History/BookingDetailsScreen';
 import ProviderProfileDetails from '../screens/Customer/History/ProviderProfileDetails';
 import ActiveUpcomingServices from '../screens/Customer/History/ActiveUpcoming/ActiveUpcomingServces';
+import AddAddressScreen from '../screens/Customer/Profile/AddAddressScreen';
  
 
 import { createSharedElementStackNavigator } from 'react-navigation-shared-element';
@@ -38,6 +39,8 @@ const StackNavigation = () => {
         <Stack.Screen name="BookingDetailsScreen" component={BookingDetailsScreen} options={{ headerShown: false, animation: 'fade' }} />
         <Stack.Screen name="ProviderProfileDetails" component={ProviderProfileDetails} options={{ headerShown: false, animation: 'fade' }} />
         <Stack.Screen name="ActiveUpcomingServices" component={ActiveUpcomingServices} options={{ headerShown: false, animation: 'fade' }} />
+        <Stack.Screen name="AddAddressScreen" component={AddAddressScreen} options={{ headerShown: false, animation: 'fade' }} />
+
 
 
 

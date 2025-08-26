@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -12,8 +12,29 @@ import {
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { SafeAreaView } from 'react-native-safe-area-context'; 
+import ServiceDetailModal from '../../../components/Cards/ServiceDetailModal';
 
 const BookingDetailsScreen = ({navigation}) => {
+    const [modalVisible, setModalVisible] = useState(false);
+    const [selectedService, setSelectedService] = useState(null);
+
+    const defaultService = {
+      id: 1,
+      title: "Embroidery Service",
+      image: require('../../../assets/images/services/hand-embroider.png'),
+      description: "Professional hand embroidery service with premium finishing."
+    };
+
+    const handleServicePress = (service) => {
+      setSelectedService(service);
+      setModalVisible(true);
+    };
+
+    const handleCloseModal = () => {
+      setModalVisible(false);
+      setSelectedService(null);
+    };
+
 
     const onShare = async () => {
         try {
@@ -85,10 +106,14 @@ const BookingDetailsScreen = ({navigation}) => {
                 <Text style={styles.rating}>4.82</Text>
               </View>
               <View style={styles.providerActions}>
-                <TouchableOpacity style={styles.bookAgainButton}>
+              <TouchableOpacity 
+                  style={styles.bookAgainButton} 
+                  onPress={() => handleServicePress(defaultService)}
+                >
                   <Text style={styles.bookAgainText}>Book again</Text>
                   <Icon name="refresh" size={16} color="#666" style={styles.refreshIcon} />
                 </TouchableOpacity>
+
                 <TouchableOpacity style={styles.shareButton} onPress={onShare}>
                   <Text style={styles.shareText}>Share Profile</Text>
                   <Icon name="share" size={16} color="#666" style={styles.shareIcon} />
@@ -130,6 +155,13 @@ const BookingDetailsScreen = ({navigation}) => {
           </View>
         </View>
       </ScrollView>
+      {/* Service Detail Modal */}
+      <ServiceDetailModal
+        visible={modalVisible}
+        onClose={handleCloseModal}
+        service={selectedService}
+      />
+
     </SafeAreaView>
   );
 };
