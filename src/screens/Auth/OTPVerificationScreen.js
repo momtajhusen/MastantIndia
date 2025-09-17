@@ -10,6 +10,9 @@ import {
   Dimensions
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { verifyOtp } from "../../services/auth";
+import { useRoute } from "@react-navigation/native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width } = Dimensions.get('window');
 
@@ -21,6 +24,8 @@ const OTPVerificationScreen = () => {
   const [canResend, setCanResend] = useState(false);
   const inputRefs = useRef([]);
   const navigation = useNavigation();
+  const route = useRoute();
+  const { phoneNumber } = route.params;
 
   // Auto focus on first input when component mounts
   useEffect(() => {
@@ -93,34 +98,43 @@ const OTPVerificationScreen = () => {
 
   const handleContinue = async () => {
     if (!isValidOtp()) {
-      setError('Please enter complete 6-digit OTP');
+      setError("Please enter complete 6-digit OTP");
       return;
     }
 
-    const otpString = otp.join('');
-    
-    // Check if OTP matches default (111111)
-    if (otpString !== '111111') {
-      setError('Invalid OTP. Please try again.');
-      return;
-    }
-
+    const otpString = otp.join(""); // ['9','5','4','1','7','3'] -> "954173"
     setLoading(true);
-    setError('');
+    setError("");
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // Navigate to CustomerBottomTabNavigator after successful verification
-      navigation.replace('CustomerBottomTabNavigator');
-      
-    } catch (error) {
-      setError('Verification failed. Please try again.');
+      // API call with correct payload
+      const res = await verifyOtp({
+        mobile: phoneNumber,
+        otp: otpString,
+        name: "Test User", // agar user name required hai
+        role: "manufacturer" // ya jo bhi role ho
+      });
+
+      if (res.data?.success === true) {
+        // Token save karna
+        await AsyncStorage.setItem("access_token", res.data?.token);
+
+        // User info bhi store kar sakte ho future use ke liye
+        await AsyncStorage.setItem("user", JSON.stringify(res.data?.user));
+
+        // Navigate to home
+        navigation.replace("CustomerBottomTabNavigator");
+      } else {
+        setError(res.data?.message || "Invalid OTP. Please try again.");
+      }
+    } catch (err) {
+      console.log("OTP verify error:", err?.response?.data || err.message);
+      setError("OTP verification failed. Try again.");
     } finally {
       setLoading(false);
     }
   };
+  
 
   const handleResendOtp = () => {
     Alert.alert('OTP Sent', 'A new 6-digit OTP has been sent to +91 9315352806');
@@ -155,7 +169,8 @@ const OTPVerificationScreen = () => {
               value={digit}
               onChangeText={(value) => handleOtpChange(value, index)}
               onKeyPress={(e) => handleKeyPress(e, index)}
-              keyboardType="numeric"
+              keyboardType="number-pad"
+              textContentType="telephoneNumber" 
               maxLength={1}
               selectTextOnFocus
               onFocus={() => setError('')}
