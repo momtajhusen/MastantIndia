@@ -12,9 +12,10 @@ import {
   TextInput,
   Platform,
   ActivityIndicator,
-  RefreshControl
+  RefreshControl,
+  ScrollView
 } from 'react-native';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { 
   getAllAddresses, 
   deleteAddress, 
@@ -22,6 +23,7 @@ import {
   setAddressActive,
   getActiveAddress 
 } from "../../../services/address";
+import LocationPickerModal from '../../../components/LocationPickerModal';
 
 const AddressBookScreen = ({ navigation }) => {
   // State variables
@@ -33,7 +35,9 @@ const AddressBookScreen = ({ navigation }) => {
   const [selectedAddress, setSelectedAddress] = useState(null);
   const [editLoading, setEditLoading] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [activeLoading, setActiveLoading] = useState(null); // Track which address is being set active
+  const [activeLoading, setActiveLoading] = useState(null);
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [selectedEditAddress, setSelectedEditAddress] = useState('');
   
   // Edit form states
   const [editFormData, setEditFormData] = useState({
@@ -45,10 +49,21 @@ const AddressBookScreen = ({ navigation }) => {
     city: '',
     state: '',
     pincode: '',
+    country: 'India',
+    latitude: null,
+    longitude: null,
+    map_address: '',
     delivery_instructions: '',
     contact_person: '',
     contact_phone: ''
   });
+
+  // Address type options
+  const addressTypes = [
+    { label: 'Home', value: 'home', icon: 'home-outline' },
+    { label: 'Office', value: 'office', icon: 'business-outline' },
+    { label: 'Other', value: 'other', icon: 'location-outline' }
+  ];
 
   // Load addresses on component mount
   useEffect(() => {
@@ -106,7 +121,6 @@ const AddressBookScreen = ({ navigation }) => {
   // Handle card press to set active
   const handleCardPress = async (item) => {
     if (item.is_active) {
-      // If already active, do nothing or show info
       Alert.alert('Active Address', 'This address is already set as active');
       return;
     }
@@ -117,7 +131,7 @@ const AddressBookScreen = ({ navigation }) => {
       
       if (response.data.success) {
         Alert.alert('Success', 'Address set as active successfully');
-        loadAddresses(); // Reload to update active status
+        loadAddresses();
       } else {
         Alert.alert('Error', response.data.message || 'Failed to set address as active');
       }
@@ -147,11 +161,35 @@ const AddressBookScreen = ({ navigation }) => {
       city: item.city || '',
       state: item.state || '',
       pincode: item.pincode || '',
+      country: item.country || 'India',
+      latitude: item.latitude || null,
+      longitude: item.longitude || null,
+      map_address: item.map_address || '',
       delivery_instructions: item.delivery_instructions || '',
       contact_person: item.contact_person || '',
       contact_phone: item.contact_phone || ''
     });
+    setSelectedEditAddress(item.map_address || '');
     setEditModalVisible(true);
+  };
+
+  // Handle location confirmation from modal
+  const handleLocationConfirm = (data) => {
+    const { location, address, locationData } = data;
+    
+    updateFormData('latitude', location.latitude.toFixed(6));
+    updateFormData('longitude', location.longitude.toFixed(6));
+    updateFormData('map_address', address);
+    setSelectedEditAddress(address);
+    
+    // Auto-fill address fields if available
+    if (locationData.country) updateFormData('country', locationData.country);
+    if (locationData.city) updateFormData('city', locationData.city);
+    if (locationData.state) updateFormData('state', locationData.state);
+    if (locationData.pincode) updateFormData('pincode', locationData.pincode);
+    
+    setShowMapModal(false);
+    Alert.alert('Success', 'Location updated! Please verify address details.');
   };
 
   // Confirm delete
@@ -163,7 +201,7 @@ const AddressBookScreen = ({ navigation }) => {
       if (response.data.success) {
         Alert.alert('Success', 'Address deleted successfully');
         setDeleteModalVisible(false);
-        loadAddresses(); // Reload addresses after deletion
+        loadAddresses();
       } else {
         Alert.alert('Error', response.data.message || 'Failed to delete address');
       }
@@ -186,13 +224,19 @@ const AddressBookScreen = ({ navigation }) => {
         return;
       }
 
+      // Validate pincode
+      if (!/^\d{6}$/.test(editFormData.pincode)) {
+        Alert.alert('Validation Error', 'Pincode must be 6 digits');
+        return;
+      }
+
       setEditLoading(true);
       const response = await updateAddress(selectedAddress.id, editFormData);
       
       if (response.data.success) {
         Alert.alert('Success', 'Address updated successfully');
         setEditModalVisible(false);
-        loadAddresses(); // Reload addresses after update
+        loadAddresses();
       } else {
         Alert.alert('Error', response.data.message || 'Failed to update address');
       }
@@ -230,6 +274,37 @@ const AddressBookScreen = ({ navigation }) => {
     return parts.join(', ');
   };
 
+  // Render address type selector
+  const renderAddressTypeSelector = () => (
+    <View style={styles.typeContainer}>
+      <Text style={styles.sectionLabel}>Address Type</Text>
+      <View style={styles.typeRow}>
+        {addressTypes.map((type) => (
+          <TouchableOpacity
+            key={type.value}
+            style={[
+              styles.typeButton,
+              editFormData.address_type === type.value && styles.typeButtonActive
+            ]}
+            onPress={() => updateFormData('address_type', type.value)}
+          >
+            <Ionicons 
+              name={type.icon} 
+              size={18} 
+              color={editFormData.address_type === type.value ? '#fff' : '#666'} 
+            />
+            <Text style={[
+              styles.typeText,
+              editFormData.address_type === type.value && styles.typeTextActive
+            ]}>
+              {type.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+
   // Render address item with improved design
   const renderItem = ({ item, index }) => {
     const typeIcon = getAddressTypeIcon(item.address_type);
@@ -254,7 +329,7 @@ const AddressBookScreen = ({ navigation }) => {
               </View>
               <View style={styles.labelContainer}>
                 <Text style={styles.labelText}>{item.address_label}</Text>
-                <Text style={styles.typeText}>
+                <Text style={styles.typeTextSmall}>
                   {item.address_type.charAt(0).toUpperCase() + item.address_type.slice(1)}
                 </Text>
               </View>
@@ -398,7 +473,7 @@ const AddressBookScreen = ({ navigation }) => {
                 <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={styles.deleteBtn} 
+                style={styles.deleteConfirmBtn} 
                 onPress={confirmDelete}
                 disabled={deleteLoading}
               >
@@ -428,94 +503,154 @@ const AddressBookScreen = ({ navigation }) => {
             <View style={styles.modalHeader}>
               <Ionicons name="create" size={24} color="#000" />
               <Text style={styles.modalTitle}>Edit Address</Text>
+              <TouchableOpacity 
+                onPress={() => setEditModalVisible(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="#666" />
+              </TouchableOpacity>
             </View>
             
-            <TextInput
-              style={styles.input}
-              value={editFormData.address_label}
-              onChangeText={(value) => updateFormData('address_label', value)}
-              placeholder="Address Label (e.g., Home, Office)"
-              placeholderTextColor="#999"
-            />
-
-            <TextInput
-              style={styles.input}
-              value={editFormData.house_flat_no}
-              onChangeText={(value) => updateFormData('house_flat_no', value)}
-              placeholder="House/Flat No *"
-              placeholderTextColor="#999"
-            />
-
-            <TextInput
-              style={styles.input}
-              value={editFormData.area_street}
-              onChangeText={(value) => updateFormData('area_street', value)}
-              placeholder="Area/Street *"
-              placeholderTextColor="#999"
-            />
-
-            <TextInput
-              style={styles.input}
-              value={editFormData.landmark}
-              onChangeText={(value) => updateFormData('landmark', value)}
-              placeholder="Landmark"
-              placeholderTextColor="#999"
-            />
-
-            <View style={styles.rowInputs}>
+            <ScrollView 
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.editScrollContent}
+            >
               <TextInput
-                style={[styles.input, styles.halfInput]}
-                value={editFormData.city}
-                onChangeText={(value) => updateFormData('city', value)}
-                placeholder="City *"
+                style={styles.input}
+                value={editFormData.address_label}
+                onChangeText={(value) => updateFormData('address_label', value)}
+                placeholder="Address Label (e.g., Home, Office)"
                 placeholderTextColor="#999"
               />
+
+              {/* Address Type Selector */}
+              {renderAddressTypeSelector()}
+
+              {/* Location Picker Button */}
+              <TouchableOpacity
+                style={styles.mapPickerButton}
+                onPress={() => setShowMapModal(true)}
+              >
+                <View style={styles.mapIconCircle}>
+                  <Ionicons name="map-outline" size={20} color="#ffffff" />
+                </View>
+                <View style={styles.mapTextContainer}>
+                  <Text style={styles.mapPickerTitle}>
+                    {editFormData.latitude && editFormData.longitude
+                      ? 'Update Location'
+                      : 'Select Location on Map'}
+                  </Text>
+                  <Text style={styles.mapPickerSubtitle}>
+                    Tap to change location
+                  </Text>
+                </View>
+                <Ionicons name="navigate-outline" size={18} color="#000000" />
+              </TouchableOpacity>
+
+              {/* Selected Location Card */}
+              {editFormData.latitude && editFormData.longitude && selectedEditAddress && (
+                <View style={styles.selectedLocationCard}>
+                  <View style={styles.locationPinHeader}>
+                    <View style={styles.pinIconCircle}>
+                      <Ionicons name="location" size={16} color="#000000" />
+                    </View>
+                    <Text style={styles.locationCardTitle}>Selected Location</Text>
+                  </View>
+                  <Text style={styles.locationAddress}>{selectedEditAddress}</Text>
+                  <Text style={styles.coordinatesText}>
+                    Lat: {editFormData.latitude}, Long: {editFormData.longitude}
+                  </Text>
+                </View>
+              )}
+
               <TextInput
-                style={[styles.input, styles.halfInput]}
-                value={editFormData.state}
-                onChangeText={(value) => updateFormData('state', value)}
-                placeholder="State *"
+                style={styles.input}
+                value={editFormData.house_flat_no}
+                onChangeText={(value) => updateFormData('house_flat_no', value)}
+                placeholder="House/Flat No *"
                 placeholderTextColor="#999"
               />
-            </View>
 
-            <TextInput
-              style={styles.input}
-              value={editFormData.pincode}
-              onChangeText={(value) => updateFormData('pincode', value)}
-              placeholder="Pincode *"
-              placeholderTextColor="#999"
-              keyboardType="numeric"
-              maxLength={6}
-            />
+              <TextInput
+                style={styles.input}
+                value={editFormData.area_street}
+                onChangeText={(value) => updateFormData('area_street', value)}
+                placeholder="Area/Street *"
+                placeholderTextColor="#999"
+              />
 
-            <TextInput
-              style={styles.input}
-              value={editFormData.contact_person}
-              onChangeText={(value) => updateFormData('contact_person', value)}
-              placeholder="Contact Person"
-              placeholderTextColor="#999"
-            />
+              <TextInput
+                style={styles.input}
+                value={editFormData.landmark}
+                onChangeText={(value) => updateFormData('landmark', value)}
+                placeholder="Landmark"
+                placeholderTextColor="#999"
+              />
 
-            <TextInput
-              style={styles.input}
-              value={editFormData.contact_phone}
-              onChangeText={(value) => updateFormData('contact_phone', value)}
-              placeholder="Contact Phone"
-              placeholderTextColor="#999"
-              keyboardType="phone-pad"
-              maxLength={10}
-            />
+              <View style={styles.rowInputs}>
+                <TextInput
+                  style={[styles.input, styles.halfInput]}
+                  value={editFormData.city}
+                  onChangeText={(value) => updateFormData('city', value)}
+                  placeholder="City *"
+                  placeholderTextColor="#999"
+                />
+                <TextInput
+                  style={[styles.input, styles.halfInput]}
+                  value={editFormData.state}
+                  onChangeText={(value) => updateFormData('state', value)}
+                  placeholder="State *"
+                  placeholderTextColor="#999"
+                />
+              </View>
 
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              value={editFormData.delivery_instructions}
-              onChangeText={(value) => updateFormData('delivery_instructions', value)}
-              placeholder="Delivery Instructions"
-              placeholderTextColor="#999"
-              multiline
-              numberOfLines={3}
-            />
+              <View style={styles.rowInputs}>
+                <TextInput
+                  style={[styles.input, styles.halfInput]}
+                  value={editFormData.pincode}
+                  onChangeText={(value) => updateFormData('pincode', value)}
+                  placeholder="Pincode *"
+                  placeholderTextColor="#999"
+                  keyboardType="numeric"
+                  maxLength={6}
+                />
+                <TextInput
+                  style={[styles.input, styles.halfInput]}
+                  value={editFormData.country}
+                  onChangeText={(value) => updateFormData('country', value)}
+                  placeholder="Country"
+                  placeholderTextColor="#999"
+                />
+              </View>
+
+              <TextInput
+                style={styles.input}
+                value={editFormData.contact_person}
+                onChangeText={(value) => updateFormData('contact_person', value)}
+                placeholder="Contact Person"
+                placeholderTextColor="#999"
+              />
+
+              <TextInput
+                style={styles.input}
+                value={editFormData.contact_phone}
+                onChangeText={(value) => updateFormData('contact_phone', value)}
+                placeholder="Contact Phone"
+                placeholderTextColor="#999"
+                keyboardType="phone-pad"
+                maxLength={10}
+              />
+
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                value={editFormData.delivery_instructions}
+                onChangeText={(value) => updateFormData('delivery_instructions', value)}
+                placeholder="Delivery Instructions"
+                placeholderTextColor="#999"
+                multiline
+                numberOfLines={3}
+              />
+            </ScrollView>
 
             <View style={styles.modalActions}>
               <TouchableOpacity 
@@ -543,6 +678,22 @@ const AddressBookScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Location Picker Modal */}
+      <LocationPickerModal
+        visible={showMapModal}
+        onClose={() => setShowMapModal(false)}
+        onConfirm={handleLocationConfirm}
+        initialLocation={
+          editFormData.latitude && editFormData.longitude
+            ? {
+                latitude: parseFloat(editFormData.latitude),
+                longitude: parseFloat(editFormData.longitude),
+              }
+            : null
+        }
+        initialAddress={selectedEditAddress}
+      />
     </View>
   );
 };
@@ -645,7 +796,7 @@ const styles = StyleSheet.create({
     color: '#000000',
     marginBottom: 2,
   },
-  typeText: {
+  typeTextSmall: {
     fontSize: 12,
     fontWeight: '600',
     textTransform: 'uppercase',
@@ -787,23 +938,32 @@ const styles = StyleSheet.create({
   },
   editModalBox: {
     width: "90%",
+    maxHeight: '85%',
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 16,
   },
+  closeButton: {
+    marginLeft: 'auto',
+    padding: 4,
+  },
   modalTitle: {
     fontSize: 20,
     fontWeight: "bold",
     color: "#000000",
     marginLeft: 8,
+    flex: 1,
   },
   modalText: {
     fontSize: 16,
     color: '#333333',
     marginBottom: 24,
     lineHeight: 24,
+  },
+  editScrollContent: {
+    paddingBottom: 10,
   },
   input: {
     borderWidth: 1,
@@ -826,10 +986,131 @@ const styles = StyleSheet.create({
     height: 80,
     textAlignVertical: 'top',
   },
+  typeContainer: {
+    marginBottom: 16,
+  },
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
+    marginBottom: 10,
+  },
+  typeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  typeButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#CCCCCC',
+    borderRadius: 8,
+    marginHorizontal: 3,
+    backgroundColor: '#FFFFFF',
+  },
+  typeButtonActive: {
+    backgroundColor: '#000000',
+    borderColor: '#000000',
+  },
+  typeText: {
+    marginLeft: 4,
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
+  },
+  typeTextActive: {
+    color: '#fff',
+  },
+  mapPickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  mapIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  mapTextContainer: {
+    flex: 1,
+  },
+  mapPickerTitle: {
+    color: '#000000',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  mapPickerSubtitle: {
+    color: '#666666',
+    fontSize: 11,
+  },
+  selectedLocationCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#000000',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  locationPinHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  pinIconCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  locationCardTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  locationAddress: {
+    fontSize: 13,
+    color: '#333333',
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  coordinatesText: {
+    fontSize: 11,
+    color: '#666666',
+    fontStyle: 'italic',
+  },
   modalActions: {
     flexDirection: "row",
     justifyContent: "flex-end",
     marginTop: 16,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#E0E0E0',
   },
   cancelBtn: {
     paddingHorizontal: 20,
@@ -842,7 +1123,7 @@ const styles = StyleSheet.create({
     color: "#666",
     fontWeight: '500',
   },
-  deleteBtn: {
+  deleteConfirmBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,

@@ -1,4 +1,4 @@
-// CartScreen.js - Complete implementation with edit functionality
+// CartScreen.js - Redesigned with new UI, keeping all API functionality
 import React, { useState, useEffect, useCallback } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
@@ -7,24 +7,25 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   StatusBar,
   SafeAreaView,
   Platform,
   ActivityIndicator,
-  RefreshControl
+  RefreshControl,
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import dayjs from 'dayjs';
-import { rh, rw, rf } from '../../../constants/responsive';
 import RazorpayPayment from '../../../components/Payment/RazorpayPayment';
 import PaymentOptionsModal from '../../../components/Cards/PaymentOptionsModal';
 import ServiceDetailModal from '../../../components/Cards/ServiceDetailModal';
 import { getCartItems, removeCartItem, updateCartItem } from "../../../services/cart";
 import { checkoutBooking } from "../../../services/bookings";
 import { useAlert, ALERT_TYPES } from '../../../components/AlertProvider';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const CartScreen = ({ navigation }) => {
+  const insets = useSafeAreaInsets();
   const { showAlert } = useAlert();
   
   // Main state
@@ -34,14 +35,23 @@ const CartScreen = ({ navigation }) => {
   const [totalAmount, setTotalAmount] = useState(0);
   const [itemCount, setItemCount] = useState(0);
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [currentBookingId, setCurrentBookingId] = useState(null);
+  const [paymentMethod, setPaymentMethod] = useState('cash');
   
   // Edit modal states
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingCartItem, setEditingCartItem] = useState(null);
 
-  const formatDateTime = (dateStr, timeStr) => {
-    return `${dayjs(dateStr).format('DD/MM/YYYY')} at ${dayjs(timeStr, 'HH:mm').format('hh:mm A')}`;
-  };
+const formatDateTime = (dateStr, timeStr, durationType, duration) => {
+  const start = dayjs(timeStr, 'HH:mm');
+  const end = durationType === 'hour' 
+    ? start.add(duration, 'hour')    // exact hours
+    : start.add(duration * 8, 'hour'); // 8 hrs per day
+
+  return `${dayjs(dateStr).format('DD MMM')} ${start.format('hh:mm A')} to ${end.format('hh:mm A')}`;
+};
+
+
 
   // Load cart items function
   const loadCartItems = async () => {
@@ -50,11 +60,9 @@ const CartScreen = ({ navigation }) => {
       const response = await getCartItems();
       
       if (response.data.success) {
-        // Transform API data to match component structure
         const transformedItems = response.data.cart_items.map(item => ({
           id: item.id,
           title: item.category.name,
-          image: item.category.icon_url || require('../../../assets/images/services/helpers.png'),
           basePrice: parseFloat(getDurationPrice(item.category, item.duration_type)),
           people: item.worker_count,
           duration: item.duration_value,
@@ -77,21 +85,13 @@ const CartScreen = ({ navigation }) => {
       }
     } catch (error) {
       console.error('Error loading cart items:', error);
-      
       showAlert({
         type: ALERT_TYPES.ERROR,
         title: 'Failed to Load Cart',
         message: 'Unable to load your cart items. Please check your connection and try again.',
         actions: [
-          {
-            text: 'Retry',
-            style: 'primary',
-            onPress: () => loadCartItems(),
-          },
-          {
-            text: 'Cancel',
-            style: 'default',
-          }
+          { text: 'Retry', style: 'primary', onPress: () => loadCartItems() },
+          { text: 'Cancel', style: 'default' }
         ],
       });
     } finally {
@@ -100,14 +100,12 @@ const CartScreen = ({ navigation }) => {
     }
   };
 
-  // Use focus effect to reload cart when screen comes into focus
   useFocusEffect(
     useCallback(() => {
       loadCartItems();
     }, [])
   );
 
-  // Initial load
   useEffect(() => {
     loadCartItems();
   }, []);
@@ -115,35 +113,23 @@ const CartScreen = ({ navigation }) => {
   // Helper functions
   const getDurationPrice = (category, durationType) => {
     switch (durationType) {
-      case 'hour':
-        return category.price_per_hour;
-      case 'day':
-        return category.price_per_day;
-      case 'week':
-        return category.price_per_week;
-      case 'month':
-        return category.price_per_month;
-      case 'full_time':
-        return category.price_full_time;
-      default:
-        return category.price_per_day;
+      case 'hour': return category.price_per_hour;
+      case 'day': return category.price_per_day;
+      case 'week': return category.price_per_week;
+      case 'month': return category.price_per_month;
+      case 'full_time': return category.price_full_time;
+      default: return category.price_per_day;
     }
   };
 
   const getServiceType = (durationType) => {
     switch (durationType) {
-      case 'hour':
-        return 'per hour';
-      case 'day':
-        return 'custom days';
-      case 'week':
-        return 'weekly';
-      case 'month':
-        return 'monthly';
-      case 'full_time':
-        return 'full time';
-      default:
-        return 'custom days';
+      case 'hour': return 'per hour';
+      case 'day': return 'custom days';
+      case 'week': return 'weekly';
+      case 'month': return 'monthly';
+      case 'full_time': return 'full time';
+      default: return 'custom days';
     }
   };
 
@@ -152,24 +138,45 @@ const CartScreen = ({ navigation }) => {
   };
 
   const calculateTotal = () => {
-    if (totalAmount > 0) {
-      return totalAmount;
-    }
+    if (totalAmount > 0) return totalAmount;
     return cartItems.reduce((total, item) => total + calculateItemPrice(item), 0);
   };
 
   const calculateTax = () => {
-    return Math.round(calculateTotal() * 0.18); // 18% GST
+    return Math.round(calculateTotal() * 0.03);
   };
 
   const calculateFinalTotal = () => {
     return calculateTotal() + calculateTax();
   };
 
+  // Quantity update handlers
+  const handleUpdateQuantity = async (item, increment) => {
+    const newQuantity = item.people + increment;
+    if (newQuantity < 1) return;
+
+    try {
+      const response = await updateCartItem(item.id, {
+        worker_count: newQuantity,
+        duration_type: item.rawData.duration_type,
+        duration_value: item.duration,
+      });
+
+      if (response.data.success) {
+        await loadCartItems();
+      }
+    } catch (error) {
+      console.error('Error updating quantity:', error);
+      showAlert({
+        type: ALERT_TYPES.ERROR,
+        title: 'Update Failed',
+        message: 'Failed to update quantity. Please try again.',
+      });
+    }
+  };
+
   // Edit functionality
   const handleEditItem = (cartItem) => {
-    console.log('Editing cart item with rawData:', cartItem.rawData);
-    console.log('Original duration_type from API:', cartItem.rawData.duration_type);
     setEditingCartItem(cartItem);
     setShowEditModal(true);
   };
@@ -180,10 +187,7 @@ const CartScreen = ({ navigation }) => {
   };
 
   const handleEditSuccess = async (updatedItem) => {
-    console.log('Cart item updated:', updatedItem);
-    // Refresh the cart to show updated data
     await loadCartItems();
-    
     showAlert({
       type: ALERT_TYPES.SUCCESS,
       title: 'Item Updated!',
@@ -199,51 +203,28 @@ const CartScreen = ({ navigation }) => {
       message: 'Are you sure you want to remove this item from your cart?',
       dismissible: false,
       actions: [
-        {
-          text: 'Keep Item',
-          style: 'default',
-        },
+        { text: 'Keep Item', style: 'default' },
         {
           text: 'Remove',
           style: 'danger',
           onPress: async () => {
             try {
               const response = await removeCartItem(itemId);
-              
               if (response.data.success) {
                 await loadCartItems();
-                
                 showAlert({
                   type: ALERT_TYPES.SUCCESS,
                   title: 'Item Removed',
                   message: 'Item has been removed from your cart successfully.',
                   duration: 2500,
                 });
-              } else {
-                showAlert({
-                  type: ALERT_TYPES.ERROR,
-                  title: 'Removal Failed',
-                  message: 'Failed to remove item from cart. Please try again.',
-                });
               }
             } catch (error) {
               console.error('Error removing cart item:', error);
-              
               showAlert({
                 type: ALERT_TYPES.ERROR,
                 title: 'Network Error',
-                message: 'Failed to remove item. Please check your connection and try again.',
-                actions: [
-                  {
-                    text: 'Retry',
-                    style: 'primary',
-                    onPress: () => handleDeleteItem(itemId),
-                  },
-                  {
-                    text: 'Cancel',
-                    style: 'default',
-                  }
-                ],
+                message: 'Failed to remove item. Please try again.',
               });
             }
           },
@@ -258,116 +239,106 @@ const CartScreen = ({ navigation }) => {
   };
 
   // Payment handlers
+  const handleCheckout = () => {
+    if (paymentMethod === 'cash') {
+      handleCashPayment();
+    } else {
+      setShowPaymentModal(true);
+    }
+  };
+
   const handleOnlinePayment = async () => {
     setShowPaymentModal(false);
-
     try {
       const response = await checkoutBooking({
         work_location: "Mumbai, Maharashtra, India",
-        work_description: "Fashion design work for new collection",
-        special_instructions: "Please bring all necessary tools and materials",
+        work_description: "Service booking from cart",
+        special_instructions: "Please contact before arrival",
       });
 
       if (response.data.success) {
+        const bookingId = response.data.bookings[0].id;
+        const amount = response.data.bookings[0].total_price;
+        setCurrentBookingId(bookingId);
+        
         showAlert({
           type: ALERT_TYPES.SUCCESS,
           title: 'Booking Created!',
           message: 'Your booking has been created successfully. Proceeding to payment...',
           duration: 2000,
         });
-
-        const bookingId = response.data.bookings[0].id;
-        const amount = response.data.bookings[0].total_price;
-
-        RazorpayPayment(amount, async (success) => {
-          if (success) {
-            showAlert({
-              type: ALERT_TYPES.SUCCESS,
-              title: 'Payment Successful!',
-              message: 'Your order has been placed successfully and payment is confirmed.',
-              actions: [
-                {
-                  text: 'View Orders',
-                  style: 'primary',
-                  onPress: () => {
-                    setCartItems([]);
-                    setTotalAmount(0);
-                    setItemCount(0);
-                    navigation.navigate("Orders");
-                  },
-                },
-              ],
-            });
-          } else {
-            showAlert({
-              type: ALERT_TYPES.ERROR,
-              title: 'Payment Failed',
-              message: 'Your payment could not be processed. Please try again or choose a different payment method.',
-              actions: [
-                {
-                  text: 'Retry Payment',
-                  style: 'primary',
-                  onPress: () => setShowPaymentModal(true),
-                },
-                {
-                  text: 'Cancel',
-                  style: 'default',
-                }
-              ],
-            });
-          }
-        });
-      } else {
-        showAlert({
-          type: ALERT_TYPES.ERROR,
-          title: 'Booking Failed',
-          message: 'Unable to create your booking. Please check your details and try again.',
-          actions: [
-            {
-              text: 'Retry',
-              style: 'primary',
-              onPress: () => setShowPaymentModal(true),
-            },
-            {
-              text: 'Cancel',
-              style: 'default',
-            }
-          ],
-        });
+        
+        setTimeout(() => handleRazorpayPayment(amount, bookingId), 500);
       }
     } catch (error) {
       console.error("Error in online payment booking:", error);
-      
       showAlert({
         type: ALERT_TYPES.ERROR,
         title: 'Booking Error',
-        message: 'Something went wrong while creating your booking. Please check your connection and try again.',
-        actions: [
-          {
-            text: 'Retry',
-            style: 'primary',
-            onPress: () => setShowPaymentModal(true),
-          },
-          {
-            text: 'Contact Support',
-            style: 'default',
-            onPress: () => {
-              navigation.navigate('Support');
-            },
-          }
-        ],
+        message: 'Something went wrong. Please try again.',
       });
     }
   };
 
-  const handleCashPayment = async () => {
-    setShowPaymentModal(false);
+  const handleRazorpayPayment = (amount, bookingId) => {
+    Alert.alert(
+      'Complete Payment',
+      `Please complete the payment of ₹${amount} to confirm your booking.`,
+      [
+        { text: 'Pay Now', onPress: () => console.log('Payment initiated for booking:', bookingId) },
+        { 
+          text: 'Cancel', 
+          style: 'cancel',
+          onPress: () => {
+            showAlert({
+              type: ALERT_TYPES.INFO,
+              title: 'Payment Cancelled',
+              message: 'Your booking is created but payment is pending.',
+            });
+          }
+        }
+      ]
+    );
+  };
 
+  const handlePaymentSuccess = (paymentData) => {
+    showAlert({
+      type: ALERT_TYPES.SUCCESS,
+      title: 'Payment Successful!',
+      message: 'Your order has been placed successfully.',
+      actions: [
+        {
+          text: 'View Orders',
+          style: 'primary',
+          onPress: () => {
+            setCartItems([]);
+            setTotalAmount(0);
+            setItemCount(0);
+            navigation.navigate("Orders");
+          },
+        },
+      ],
+    });
+  };
+
+  const handlePaymentFailure = (error) => {
+    showAlert({
+      type: ALERT_TYPES.ERROR,
+      title: 'Payment Failed',
+      message: 'Your payment could not be processed. Please try again.',
+      actions: [
+        { text: 'Retry Payment', style: 'primary', onPress: () => setShowPaymentModal(true) },
+        { text: 'Cancel', style: 'default' }
+      ],
+    });
+  };
+
+  const handleCashPayment = async () => {
     try {
       const response = await checkoutBooking({
         work_location: "Mumbai, Maharashtra, India",
-        work_description: "Fashion design work for new collection",
-        special_instructions: "Please bring all necessary tools and materials",
+        work_description: "Service booking from cart",
+        special_instructions: "Cash on delivery",
         payment_method: "cash",
       });
 
@@ -375,7 +346,7 @@ const CartScreen = ({ navigation }) => {
         showAlert({
           type: ALERT_TYPES.SUCCESS,
           title: 'Order Confirmed!',
-          message: 'Your cash payment order has been confirmed successfully. You can pay when the service is delivered.',
+          message: 'Your cash payment order has been confirmed successfully.',
           actions: [
             {
               text: 'View Bookings',
@@ -389,50 +360,19 @@ const CartScreen = ({ navigation }) => {
             },
           ],
         });
-      } else {
-        showAlert({
-          type: ALERT_TYPES.ERROR,
-          title: 'Booking Failed',
-          message: 'Failed to confirm your cash payment booking. Please try again.',
-          actions: [
-            {
-              text: 'Retry',
-              style: 'primary',
-              onPress: () => setShowPaymentModal(true),
-            },
-            {
-              text: 'Cancel',
-              style: 'default',
-            }
-          ],
-        });
       }
     } catch (error) {
       console.error("Error in cash payment booking:", error);
-      
       showAlert({
         type: ALERT_TYPES.ERROR,
         title: 'Network Error',
-        message: 'Something went wrong while confirming your booking. Please check your connection and try again.',
-        actions: [
-          {
-            text: 'Retry',
-            style: 'primary',
-            onPress: () => setShowPaymentModal(true),
-          },
-          {
-            text: 'Contact Support',
-            style: 'default',
-            onPress: () => navigation.navigate('Support'),
-          }
-        ],
+        message: 'Something went wrong. Please try again.',
       });
     }
   };
 
   const handleWalletPayment = async () => {
     setShowPaymentModal(false);
-
     showAlert({
       type: ALERT_TYPES.INFO,
       title: 'Processing Payment...',
@@ -443,8 +383,8 @@ const CartScreen = ({ navigation }) => {
     try {
       const response = await checkoutBooking({
         work_location: "Mumbai, Maharashtra, India",
-        work_description: "Fashion design work for new collection",
-        special_instructions: "Please bring all necessary tools and materials",
+        work_description: "Service booking from cart",
+        special_instructions: "Wallet payment",
         payment_method: "wallet",
       });
 
@@ -452,7 +392,7 @@ const CartScreen = ({ navigation }) => {
         showAlert({
           type: ALERT_TYPES.SUCCESS,
           title: 'Payment Successful!',
-          message: `Your wallet payment of ₹${calculateFinalTotal()} has been processed successfully. Your booking is confirmed!`,
+          message: `Your wallet payment of ₹${calculateFinalTotal()} has been processed successfully.`,
           actions: [
             {
               text: 'View Bookings',
@@ -464,153 +404,80 @@ const CartScreen = ({ navigation }) => {
                 navigation.navigate('ActiveUpcomingServices', { initialTab: 'Upcoming' });
               },
             },
-            {
-              text: 'Check Wallet',
-              style: 'default',
-              onPress: () => {
-                navigation.navigate('Wallet');
-              },
-            }
-          ],
-        });
-      } else {
-        const errorMessage = response.data.message || 'Unable to process wallet payment.';
-        
-        showAlert({
-          type: ALERT_TYPES.ERROR,
-          title: 'Wallet Payment Failed',
-          message: `${errorMessage} Please check your wallet balance or try a different payment method.`,
-          actions: [
-            {
-              text: 'Add Money to Wallet',
-              style: 'primary',
-              onPress: () => {
-                navigation.navigate('Wallet', { action: 'add_money' });
-              },
-            },
-            {
-              text: 'Try Other Payment',
-              style: 'default',
-              onPress: () => setShowPaymentModal(true),
-            }
           ],
         });
       }
     } catch (error) {
-      console.error("Error in wallet payment booking:", error);
-      
-      const isInsufficientBalance = error.response?.data?.message?.includes('insufficient') || 
-                                    error.response?.data?.message?.includes('balance');
-      
-      if (isInsufficientBalance) {
-        showAlert({
-          type: ALERT_TYPES.ERROR,
-          title: 'Insufficient Balance',
-          message: 'Your wallet doesn\'t have enough balance for this transaction. Please add money to your wallet.',
-          actions: [
-            {
-              text: 'Add Money',
-              style: 'primary',
-              onPress: () => {
-                navigation.navigate('Wallet', { action: 'add_money' });
-              },
-            },
-            {
-              text: 'Choose Other Payment',
-              style: 'default',
-              onPress: () => setShowPaymentModal(true),
-            }
-          ],
-        });
-      } else {
-        showAlert({
-          type: ALERT_TYPES.ERROR,
-          title: 'Payment Error',
-          message: 'Something went wrong while processing your wallet payment. Please try again or contact support.',
-          actions: [
-            {
-              text: 'Retry',
-              style: 'primary',
-              onPress: () => setShowPaymentModal(true),
-            },
-            {
-              text: 'Contact Support',
-              style: 'default',
-              onPress: () => navigation.navigate('Support'),
-            }
-          ],
-        });
-      }
+      console.error("Error in wallet payment:", error);
+      showAlert({
+        type: ALERT_TYPES.ERROR,
+        title: 'Payment Error',
+        message: 'Something went wrong. Please try again.',
+      });
     }
   };
 
-  // Components
-  const CartItem = ({ item }) => (
-    <View style={styles.cartItem}>
-      <View style={styles.itemImageContainer}>
-        <Image 
-          source={
-            item.image && typeof item.image === 'string' 
-              ? { uri: item.image } 
-              : item.image || require('../../../assets/images/services/helpers.png')
-          } 
-          style={styles.itemImage} 
-          resizeMode="cover" 
+  // Render Razorpay Payment Component
+  const renderRazorpayPayment = () => {
+    if (!currentBookingId) return null;
+    return (
+      <View style={{ display: 'none' }}>
+        <RazorpayPayment
+          amount={calculateFinalTotal()}
+          orderDetails={{
+            order_id: currentBookingId,
+            email: 'user@example.com',
+            contact: '9876543210',
+            name: 'Customer'
+          }}
+          onSuccess={handlePaymentSuccess}
+          onFailure={handlePaymentFailure}
         />
       </View>
-      
-      <View style={styles.itemDetails}>
-        <View style={styles.itemHeader}>
-          <Text style={styles.itemTitle}>{item.title}</Text>
-          <View style={styles.actionButtons}>
-            <TouchableOpacity 
-              style={styles.editButton}
-              onPress={() => handleEditItem(item)}
-            >
-              <Ionicons name="create-outline" size={18} color="#0066cc" />
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={styles.deleteButton}
-              onPress={() => handleDeleteItem(item.id)}
-            >
-              <Ionicons name="trash-outline" size={18} color="#ff4444" />
-            </TouchableOpacity>
-          </View>
-        </View>
-        <Text style={styles.itemType}>{item.type}</Text>
-        <Text style={styles.itemPrice}>
-          ₹{item.basePrice}/{item.durationType === 'hours' ? 'hr' : 'day'}/person
-        </Text>
-        
-        <View style={styles.itemControls}>
-          <View style={styles.controlGroup}>
-            <Ionicons name="people-outline" size={14} color="#666" />
-            <Text style={styles.controlValue}>{item.people} people</Text>
-          </View>
-          
-          <View style={styles.controlGroup}>
-            <Ionicons name={item.durationType === 'hours' ? 'time-outline' : 'calendar-outline'} size={14} color="#666" />
-            <Text style={styles.controlValue}>{item.duration} {item.durationType}</Text>
-          </View>
-        </View>
-        
-        {item.preferredDate && (
-          <View style={styles.scheduleInfo}>
-            <Ionicons name="calendar-outline" size={12} color="#666" />
-            <Text style={styles.scheduleText}>
-              {formatDateTime(item.preferredDate, item.preferredTime)}
-            </Text>
-          </View>
-        )}
+    );
+  };
 
-        {item.specialRequirements && (
-          <View style={styles.requirementsContainer}>
-            <Text style={styles.requirementsLabel}>Special Requirements:</Text>
-            <Text style={styles.requirementsText}>{item.specialRequirements}</Text>
-          </View>
-        )}
+  // Cart Item Component (New Design - No quantity controls, only edit/delete)
+  const CartItem = ({ item }) => (
+    <View style={styles.cartItem}>
+      <View style={styles.itemMainContent}>
+        <View style={styles.itemLeft}>
+          <Text style={styles.itemTitle}>{item.title}</Text>
+          <Text style={styles.itemDuration}>Duration - {item.duration} {item.durationType}</Text>
+          <Text style={styles.itemDateTime}>
+            Date & time - {item.preferredDate && item.preferredTime 
+              ? formatDateTime(item.preferredDate, item.preferredTime, item.durationType, item.duration)
+              : 'Not scheduled'}
+          </Text>
+
+          <Text style={styles.itemHours}>
+            {item.durationType === 'hour' 
+              ? `${item.duration} hrs` 
+              : `${item.duration * 8} hrs x ${item.durationType}`}
+          </Text>
+
+
+        </View>
         
-        <Text style={styles.totalItemPrice}>Total: ₹{calculateItemPrice(item)}</Text>
+        <View style={styles.itemRight}>
+          <Text style={styles.itemPrice}>Rs {calculateItemPrice(item)}</Text>
+        </View>
+      </View>
+      
+      <View style={styles.itemActions}>
+        <TouchableOpacity 
+          style={styles.editServiceButton}
+          onPress={() => handleEditItem(item)}
+        >
+          <Text style={styles.editServiceText}>edit service</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity 
+          style={styles.deleteButton}
+          onPress={() => handleDeleteItem(item.id)}
+        >
+          <Ionicons name="trash-outline" size={20} color="#ff4444" />
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -631,19 +498,14 @@ const CartScreen = ({ navigation }) => {
 
   const LoadingScreen = () => (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
-      
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="chevron-back" size={28} color="#000" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Cart</Text>
-        <View style={styles.headerRight} />
+        <View style={{ width: 28 }} />
       </View>
-
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#000" />
         <Text style={styles.loadingText}>Loading cart...</Text>
@@ -658,28 +520,18 @@ const CartScreen = ({ navigation }) => {
   if (cartItems.length === 0) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle="light-content" backgroundColor="#000" />
-        
+        <StatusBar barStyle="dark-content" backgroundColor="#fff" />
         <View style={styles.header}>
-          <TouchableOpacity 
-            style={styles.backButton}
-            onPress={() => navigation.goBack()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#fff" />
+          <TouchableOpacity onPress={() => navigation.goBack()}>
+            <Ionicons name="chevron-back" size={28} color="#000" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Cart</Text>
-          <View style={styles.headerRight} />
+          <View style={{ width: 28 }} />
         </View>
-
         <ScrollView 
           style={styles.content}
           refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={handleRefresh}
-              colors={['#000']}
-              tintColor={'#000'}
-            />
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
           }
         >
           <EmptyCart />
@@ -689,100 +541,88 @@ const CartScreen = ({ navigation }) => {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" backgroundColor="#000" />
+    <View style={{
+      flex: 1,
+      backgroundColor: '#fff',
+      paddingTop: insets.top, // ✅ will auto handle notch + navbar
+    }}>
+      <StatusBar barStyle="dark-content" backgroundColor="#fff" />
       
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity 
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="chevron-back" size={28} color="#000" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Cart ({itemCount || cartItems.length} items)</Text>
-        <TouchableOpacity 
-          style={styles.headerRight}
-          onPress={handleRefresh}
-        >
-          <Ionicons name="refresh-outline" size={24} color="#fff" />
-        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Cart</Text>
+        <View style={{ width: 28 }} />
       </View>
 
       {/* Cart Content */}
       <ScrollView 
         style={styles.content} 
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={handleRefresh}
-            colors={['#000']}
-            tintColor={'#000'}
-            progressBackgroundColor={'#f5f5f5'}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
         {/* Cart Items */}
-        <View style={styles.itemsContainer}>
-          {cartItems.map(item => (
-            <CartItem key={item.id} item={item} />
-          ))}
-        </View>
+        {cartItems.map(item => (
+          <CartItem key={item.id} item={item} />
+        ))}
 
-        {/* Order Summary */}
+        {/* Payment Summary */}
         <View style={styles.summaryContainer}>
-          <Text style={styles.summaryTitle}>Order Summary</Text>
+          <Text style={styles.summaryTitle}>Payment summary</Text>
           
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Subtotal</Text>
-            <Text style={styles.summaryValue}>₹{calculateTotal()}</Text>
+            <Text style={styles.summaryLabel}>Item total</Text>
+            <Text style={styles.summaryValue}>Rs {calculateTotal()}</Text>
           </View>
           
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>GST (18%)</Text>
-            <Text style={styles.summaryValue}>₹{calculateTax()}</Text>
+            <Text style={styles.summaryLabel}>Taxes and Fee</Text>
+            <Text style={styles.summaryValue}>Rs {calculateTax()}</Text>
           </View>
           
+          <View style={styles.summaryDivider} />
+          
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Delivery</Text>
-            <Text style={[styles.summaryValue, styles.freeText]}>Free</Text>
+            <Text style={styles.summaryTotalLabel}>Total Amount</Text>
+            <Text style={styles.summaryTotalValue}>Rs {calculateFinalTotal()}</Text>
           </View>
           
-          <View style={styles.divider} />
+          <View style={styles.summaryDivider} />
           
           <View style={styles.summaryRow}>
-            <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>₹{calculateFinalTotal()}</Text>
+            <Text style={styles.summaryTotalLabel}>Amount to pay</Text>
+            <Text style={styles.summaryTotalValue}>Rs {calculateFinalTotal()}</Text>
           </View>
         </View>
 
-        {/* Delivery Address */}
-        <View style={styles.addressContainer}>
-          <View style={styles.addressHeader}>
-            <Text style={styles.addressTitle}>Delivery Address</Text>
-            <TouchableOpacity onPress={() => navigation.navigate('AddressBookScreen')}>
-              <Text style={styles.changeAddressText}>Change</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.addressText}>64 A shahpurjat new delhi</Text>
-          <Text style={styles.addressText}>pincode - 110017</Text>
-        </View>
-        <View style={styles.bottomPadding} />
+        <View style={{ height: 180 }} />
       </ScrollView>
 
-      {/* Checkout Footer */}
-      <View style={styles.checkoutFooter}>
-        <View style={styles.totalContainer}>
-          <Text style={styles.footerTotalLabel}>Total</Text>
-          <Text style={styles.footerTotalAmount}>₹{calculateFinalTotal()}</Text>
+      {/* Bottom Payment Bar */}
+      <View style={styles.bottomBar}>
+        <View style={styles.paymentMethodContainer}>
+          <Text style={styles.payViaLabel}>Pay via</Text>
+          <TouchableOpacity 
+            style={styles.paymentMethodButton}
+            onPress={() => setShowPaymentModal(true)}
+          >
+            <Text style={styles.paymentMethodText}>
+              {paymentMethod === 'cash' ? 'Cash on delivery' : 'Online Payment'}
+            </Text>
+            <Ionicons name="chevron-down" size={16} color="#666" />
+          </TouchableOpacity>
         </View>
-
+        
         <TouchableOpacity
-          style={styles.checkoutButton}
-          onPress={() => setShowPaymentModal(true)}
+          style={styles.payButton}
+          onPress={handleCheckout}
         >
-          <Text style={styles.checkoutButtonText}>Checkout</Text>
+          <Text style={styles.payButtonText}>Pay Rs {calculateFinalTotal()}</Text>
         </TouchableOpacity>
       </View>
 
@@ -791,7 +631,10 @@ const CartScreen = ({ navigation }) => {
         visible={showPaymentModal}
         onClose={() => setShowPaymentModal(false)}
         onOnlinePayment={handleOnlinePayment}
-        onCashPayment={handleCashPayment}
+        onCashPayment={() => {
+          setPaymentMethod('cash');
+          setShowPaymentModal(false);
+        }}
         onWalletPayment={handleWalletPayment}
         totalAmount={calculateFinalTotal()}
       />
@@ -805,11 +648,9 @@ const CartScreen = ({ navigation }) => {
           editMode={true}
           cartItemId={editingCartItem.id}
           initialData={{
-            // Pass the complete rawData object which contains the original API response
             rawData: editingCartItem.rawData,
-            // Also pass individual fields for backward compatibility
             worker_count: editingCartItem.rawData.worker_count,
-            duration_type: editingCartItem.rawData.duration_type, // FIXED: Use rawData
+            duration_type: editingCartItem.rawData.duration_type,
             duration_value: editingCartItem.rawData.duration_value,
             preferred_date: editingCartItem.rawData.preferred_date,
             preferred_time: editingCartItem.rawData.preferred_time,
@@ -819,169 +660,122 @@ const CartScreen = ({ navigation }) => {
           onAddToCart={handleEditSuccess}
         />
       )}
-    </SafeAreaView>
+
+      {/* Razorpay Payment Component */}
+      {renderRazorpayPayment()}
+    </View>
   );
 };
 
-
-// Keep the same styles as before
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#fff',
   },
   header: {
-    backgroundColor: '#000',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#fff',
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
   headerTitle: {
-    color: '#fff',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: 'bold',
-    flex: 1,
-    textAlign: 'center',
-  },
-  headerRight: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+    color: '#000',
   },
   content: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#fff',
+  },
+  scrollContent: {
+    paddingBottom: 20,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#f5f5f5',
   },
   loadingText: {
     marginTop: 10,
     fontSize: 16,
     color: '#666',
   },
-  itemsContainer: {
-    backgroundColor: '#fff',
-    marginTop: 10,
-  },
   cartItem: {
-    flexDirection: 'row',
-    padding: 15,
+    paddingHorizontal: 16,
+    paddingVertical: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    alignItems: 'flex-start',
+    borderBottomColor: '#e0e0e0',
   },
-  itemImageContainer: {
-    width: 60,
-    height: 60,
-    borderRadius: 10,
-    overflow: 'hidden',
-    marginRight: 15,
-  },
-  itemImage: {
-    width: '100%',
-    height: '100%',
-  },
-  itemDetails: {
-    flex: 1,
-    justifyContent: 'flex-start',
-  },
-  itemHeader: {
+  itemMainContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 12,
   },
-  itemTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
+  itemLeft: {
     flex: 1,
   },
-  actionButtons: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  editButton: {
-    padding: 4,
-  },
-  deleteButton: {
-    padding: 4,
-  },
-  itemType: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 4,
-  },
-  itemPrice: {
-    fontSize: 12,
-    color: '#666',
-    marginBottom: 8,
-  },
-  itemControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-    gap: 15,
-  },
-  controlGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  controlValue: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '500',
-  },
-  requirementsContainer: {
-    marginBottom: 8,
-    padding: 8,
-    backgroundColor: '#f9f9f9',
-    borderRadius: 6,
-  },
-  requirementsLabel: {
-    fontSize: 11,
-    color: '#666',
-    fontWeight: '600',
-    marginBottom: 2,
-  },
-  requirementsText: {
-    fontSize: 12,
-    color: '#333',
-    lineHeight: 16,
-  },
-  totalItemPrice: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#000',
-  },
-  summaryContainer: {
-    backgroundColor: '#fff',
-    marginTop: 10,
-    padding: 20,
-  },
-  summaryTitle: {
+  itemTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#000',
-    marginBottom: 15,
+    marginBottom: 4,
+  },
+  itemDuration: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 2,
+  },
+  itemDateTime: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
+  itemHours: {
+    fontSize: 14,
+    color: '#000',
+    fontWeight: '500',
+  },
+  itemRight: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  itemPrice: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#000',
+  },
+  itemActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  editServiceButton: {
+    borderWidth: 1,
+    borderColor: '#d0d0d0',
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+  },
+  editServiceText: {
+    fontSize: 14,
+    color: '#000',
+  },
+  deleteButton: {
+    padding: 8,
+  },
+  summaryContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 20,
+  },
+  summaryTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 16,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -990,101 +784,76 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   summaryLabel: {
-    fontSize: 14,
-    color: '#666',
+    fontSize: 16,
+    color: '#000',
   },
   summaryValue: {
-    fontSize: 14,
-    color: '#000',
-    fontWeight: '500',
-  },
-  freeText: {
-    color: '#4CAF50',
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#eee',
-    marginVertical: 10,
-  },
-  totalLabel: {
     fontSize: 16,
     fontWeight: '600',
     color: '#000',
   },
-  totalValue: {
+  summaryDivider: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginVertical: 12,
+  },
+  summaryTotalLabel: {
     fontSize: 18,
     fontWeight: 'bold',
     color: '#000',
   },
-  addressContainer: {
-    backgroundColor: '#fff',
-    marginTop: 10,
-    padding: 20,
-  },
-  addressHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  addressTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-  },
-  changeAddressText: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '500',
-  },
-  addressText: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
-  },
-  bottomPadding: {
-    height: 100,
-  },
-  checkoutFooter: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderTopWidth: 1,
-    borderTopColor: '#eee',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-  },
-  totalContainer: {
-    alignItems: 'flex-start',
-  },
-  footerTotalLabel: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 2,
-  },
-  footerTotalAmount: {
-    fontSize: 20,
+  summaryTotalValue: {
+    fontSize: 18,
     fontWeight: 'bold',
     color: '#000',
   },
-  checkoutButton: {
-    backgroundColor: '#000',
-    paddingHorizontal: 30,
-    paddingVertical: 12,
-    borderRadius: 25,
-    minWidth: 150,
+  bottomBar: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#fff',
+    borderTopWidth: 1,
+    borderTopColor: '#e0e0e0',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 16,
   },
-  checkoutButtonText: {
-    color: '#fff',
+  paymentMethodContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  payViaLabel: {
     fontSize: 16,
+    fontWeight: '500',
+    color: '#000',
+    marginRight: 8,
+  },
+  paymentMethodButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#d0d0d0',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  paymentMethodText: {
+    fontSize: 14,
+    color: '#000',
+    marginRight: 4,
+  },
+  payButton: {
+    backgroundColor: '#000',
+    borderRadius: 25,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  payButtonText: {
+    fontSize: 18,
     fontWeight: '600',
-    textAlign: 'center',
+    color: '#fff',
   },
   emptyCartContainer: {
     flex: 1,

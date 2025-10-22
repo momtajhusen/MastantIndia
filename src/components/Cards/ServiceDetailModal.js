@@ -1,4 +1,4 @@
-// components/ServiceDetailModal.js (Enhanced with Edit Functionality - UPDATED)
+// components/ServiceDetailModal.js (Complete with Dynamic Pricing)
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -12,18 +12,10 @@ import {
   ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { getPublicCategory, calculatePrice} from "../../services/categories";
+import { getCategoryById, calculatePrice } from "../../services/categories";
 import { addToCart, updateCartItem } from "../../services/cart";
 import { useAlert, ALERT_TYPES } from '../AlertProvider';
 import { useNavigation } from '@react-navigation/native';
-
-// Import our components
-import DurationTypeSelector from '../../components/Cards/ServiceDetailModalComponent/DurationTypeSelector';
-import CounterControl from '../../components/Cards/ServiceDetailModalComponent/CounterControl';
-import CompactCalendar from '../../components/Cards/ServiceDetailModalComponent/CompactCalendar';
-import TimePicker from '../../components/Cards/ServiceDetailModalComponent/TimePicker';
-import PriceDisplay from '../../components/Cards/ServiceDetailModalComponent/PriceDisplay';
-import SpecialRequirementsInput from '../../components/Cards/ServiceDetailModalComponent/SpecialRequirementsInput';
 
 const { width, height } = Dimensions.get('window');
 
@@ -32,11 +24,12 @@ const ServiceDetailModal = ({
   onClose, 
   serviceId, 
   onAddToCart,
-  editMode = false,        // NEW: Flag to indicate edit mode
-  cartItemId = null,       // NEW: Cart item ID for editing
-  initialData = null       // NEW: Initial data for editing
+  editMode = false,
+  cartItemId = null,
+  initialData = null
 }) => {
   const navigation = useNavigation();
+  const { showAlert } = useAlert();
   
   // State management
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -44,106 +37,133 @@ const ServiceDetailModal = ({
   const [workerCount, setWorkerCount] = useState(1);
   const [durationValue, setDurationValue] = useState(4);
   const [selectedTime, setSelectedTime] = useState('09:00');
-  const [specialRequirements, setSpecialRequirements] = useState('');
-  const [endDate, setEndDate] = useState(new Date());
-  const { showAlert } = useAlert();
-  
-  // API-related states
   const [service, setService] = useState(null);
   const [loading, setLoading] = useState(false);
   const [priceCalculation, setPriceCalculation] = useState(null);
   const [calculatingPrice, setCalculatingPrice] = useState(false);
   const [addingToCart, setAddingToCart] = useState(false);
+  const [showTimeModal, setShowTimeModal] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
 
-  // Duration types configuration
-  const durationTypes = [
-    { key: 'hour', label: 'Hourly', minValue: 4, maxValue: 12, icon: 'time-outline' },
-    { key: 'day', label: 'Daily', minValue: 1, maxValue: 30, icon: 'calendar-outline' },
-    { key: 'week', label: 'Weekly', minValue: 1, maxValue: 12, icon: 'calendar-number-outline' },
-    { key: 'month', label: 'Monthly', minValue: 1, maxValue: 12, icon: 'calendar' },
-    { key: 'full_time', label: 'Full Time', minValue: 1, maxValue: 1, icon: 'briefcase-outline' }
-  ];
+  // Duration options with dynamic pricing from API
+  const getDurationOptions = () => {
+    if (!service || !service.price_per_hour) {
+      return [
+        { key: 'instant', label: 'get instant', price: 'Rs 0/ph', durationType: 'hour', value: 4 },
+        { key: 'custom', label: 'custom days', price: 'Rs 0/pd', durationType: 'day', value: 1 },
+        { key: 'week', label: '1 week', price: 'Rs 0/pw', durationType: 'week', value: 1 },
+        { key: 'monthly', label: '- monthly +', price: 'Rs 0/pm', durationType: 'month', value: 1 }
+      ];
+    }
 
-  // NEW: Initialize form with existing data in edit mode
+    const hourlyPrice = parseFloat(service.price_per_hour || 0);
+    const dailyPrice = parseFloat(service.price_per_day || 0);
+    const weeklyPrice = parseFloat(service.price_per_week || 0);
+    const monthlyPrice = parseFloat(service.price_per_month || 0);
+
+    return [
+      { 
+        key: 'instant', 
+        label: 'get instant', 
+        price: `Rs ${hourlyPrice.toFixed(0)}/ph`, 
+        durationType: 'hour', 
+        value: 4 
+      },
+      { 
+        key: 'custom', 
+        label: 'custom days', 
+        price: `Rs ${dailyPrice.toFixed(0)}/pd`, 
+        durationType: 'day', 
+        value: 1 
+      },
+      { 
+        key: 'week', 
+        label: '1 week', 
+        price: `Rs ${weeklyPrice.toFixed(0)}/pw`, 
+        durationType: 'week', 
+        value: 1 
+      },
+      { 
+        key: 'monthly', 
+        label: '- monthly +', 
+        price: `Rs ${monthlyPrice.toFixed(0)}/pm`, 
+        durationType: 'month', 
+        value: 1 
+      }
+    ];
+  };
+
+  const durationOptions = getDurationOptions();
+
+  // Calendar generation
+  const generateCalendar = () => {
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+
+    const days = [];
+    
+    // Adjust starting day (Monday = 0, Sunday = 6)
+    const adjustedStartDay = startingDayOfWeek === 0 ? 6 : startingDayOfWeek - 1;
+    
+    // Add previous month's trailing days
+    const prevMonthLastDay = new Date(year, month, 0).getDate();
+    for (let i = adjustedStartDay - 1; i >= 0; i--) {
+      const prevDate = new Date(year, month - 1, prevMonthLastDay - i);
+      days.push({ date: prevDate, isCurrentMonth: false });
+    }
+    
+    // Add current month days
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push({ date: new Date(year, month, i), isCurrentMonth: true });
+    }
+    
+    // Add next month's leading days
+    const remainingDays = 42 - days.length;
+    for (let i = 1; i <= remainingDays; i++) {
+      days.push({ date: new Date(year, month + 1, i), isCurrentMonth: false });
+    }
+    
+    return days;
+  };
+
+  const calendarDays = generateCalendar();
+
+  // Time options
+  const timeOptions = Array.from({ length: 24 }, (_, i) => {
+    const hour = i.toString().padStart(2, '0');
+    return `${hour}:00`;
+  });
+
+  // Initialize form with existing data in edit mode
   useEffect(() => {
     if (editMode && initialData) {
-      console.log('Initializing edit mode with data:', initialData);
-      
-      // Use rawData if available (from cart), otherwise use direct properties
       const cartData = initialData.rawData || initialData;
       
-      // Set initial values from cart item data
-      setWorkerCount(cartData.worker_count || initialData.people || 1);
+      setWorkerCount(cartData.worker_count || 1);
       setSelectedDurationType(cartData.duration_type || 'hour');
       setDurationValue(cartData.duration_value || initialData.duration || 4);
-      setSpecialRequirements(cartData.special_requirements || initialData.specialRequirements || '');
       
-      // Parse preferred date - handle both formats
       let preferredDate = cartData.preferred_date || initialData.preferredDate;
       if (preferredDate) {
-        // Extract just the date part if it's a full datetime
         if (typeof preferredDate === 'string') {
           const dateOnly = preferredDate.split('T')[0];
-          setSelectedDate(new Date(dateOnly));
+          const parsedDate = new Date(dateOnly);
+          setSelectedDate(parsedDate);
+          setCalendarMonth(new Date(parsedDate));
         } else {
           setSelectedDate(new Date(preferredDate));
+          setCalendarMonth(new Date(preferredDate));
         }
       }
       
-      // FIXED: Set preferred time - handle both formats and extract time properly
-      let preferredTime = cartData.preferred_time || initialData.preferredTime;
-      if (preferredTime) {
-        if (typeof preferredTime === 'string') {
-          let timeString = preferredTime;
-          
-          // If it's a full datetime string, extract just the time part
-          if (preferredTime.includes('T')) {
-            const timePart = preferredTime.split('T')[1];
-            timeString = timePart.substring(0, 5); // Get HH:MM
-          } else {
-            // If it's already just time format
-            timeString = preferredTime.substring(0, 5);
-          }
-          
-          // FIXED: Validate that the extracted time exists in our timeOptions
-          const timeOptions = [
-            '06:00', '06:30', '07:00', '07:30', '08:00', '08:30',
-            '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-            '12:00', '12:30', '13:00', '13:30', '14:00', '14:30',
-            '15:00', '15:30', '16:00', '16:30', '17:00', '17:30',
-            '18:00', '18:30', '19:00', '19:30', '20:00', '20:30'
-          ];
-          
-          // Check if the time exists in our options, if not, find closest match
-          if (timeOptions.includes(timeString)) {
-            setSelectedTime(timeString);
-            console.log('Selected time from cart data:', timeString);
-          } else {
-            // Find closest time option
-            const [hour, minute] = timeString.split(':').map(Number);
-            let closestTime = '09:00'; // Default fallback
-            
-            // Round to nearest 30-minute interval and find in options
-            const roundedMinute = minute >= 30 ? 30 : 0;
-            const formattedTime = `${hour.toString().padStart(2, '0')}:${roundedMinute.toString().padStart(2, '0')}`;
-            
-            if (timeOptions.includes(formattedTime)) {
-              closestTime = formattedTime;
-            } else {
-              // Find the closest available time
-              closestTime = timeOptions.find(time => {
-                const [optionHour] = time.split(':').map(Number);
-                return optionHour >= hour;
-              }) || '09:00';
-            }
-            
-            setSelectedTime(closestTime);
-            console.log(`Original time ${timeString} not in options, using closest: ${closestTime}`);
-          }
-        }
+      if (cartData.preferred_time || initialData.preferredTime) {
+        setSelectedTime(cartData.preferred_time || initialData.preferredTime);
       }
       
-      // Set service data from cart item
       const categoryData = cartData.category || initialData.category;
       if (categoryData) {
         setService({
@@ -151,26 +171,23 @@ const ServiceDetailModal = ({
           name: categoryData.name,
           description: categoryData.description,
           price_per_hour: categoryData.price_per_hour,
+          price_per_day: categoryData.price_per_day,
+          price_per_week: categoryData.price_per_week,
+          price_per_month: categoryData.price_per_month,
+          price_full_time: categoryData.price_full_time,
         });
       }
-      
-      console.log('Edit mode initialized with:', {
-        duration_type: cartData.duration_type,
-        preferred_time: preferredTime,
-        selected_time_will_be: selectedTime
-      });
     } else {
-      // Reset to default values for add mode
       setWorkerCount(1);
       setSelectedDurationType('hour');
       setDurationValue(4);
       setSelectedTime('09:00');
-      setSpecialRequirements('');
       setSelectedDate(new Date());
+      setCalendarMonth(new Date());
     }
   }, [editMode, initialData]);
 
-  // Effects
+  // Fetch service details
   useEffect(() => {
     if (!editMode && serviceId) {
       fetchServiceDetails();
@@ -180,73 +197,23 @@ const ServiceDetailModal = ({
     }
   }, [serviceId, editMode]);
 
+  // Calculate price whenever parameters change
   useEffect(() => {
-    if (service && durationValue > 0) {
-      calculateServicePrice();
+    if (service && durationValue > 0 && workerCount > 0) {
+      const timer = setTimeout(() => {
+        calculateServicePrice();
+      }, 100);
+      return () => clearTimeout(timer);
     }
-  }, [selectedDurationType, workerCount, durationValue, service]);
+  }, [selectedDurationType, durationValue, workerCount, service]);
 
-  useEffect(() => {
-    if (selectedDurationType && durationValue) {
-      calculateEndDate();
-    }
-  }, [selectedDurationType, durationValue, selectedDate]);
-
-  // Data Validation Helper
-const validateCartData = (cartData) => {
-  const errors = [];
-  
-  // Required fields validation
-  if (!cartData.worker_count || cartData.worker_count < 1) errors.push('Worker count must be at least 1');
-  if (!cartData.duration_value || cartData.duration_value < 1) errors.push('Duration value must be at least 1');
-  if (!cartData.preferred_date) errors.push('Preferred date is required');
-  if (!cartData.preferred_time) errors.push('Preferred time is required');
-
-  // Data type validation
-  if (typeof cartData.worker_count !== 'number') errors.push('Worker count must be a number');
-  if (typeof cartData.duration_value !== 'number') errors.push('Duration value must be a number');
-
-  // Date validation
-  const selectedDateObj = new Date(cartData.preferred_date);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  if (selectedDateObj < today) {
-    errors.push('Cannot select past dates');
-  }
-
-  // FIXED: Time validation - ensure it's in HH:MM format (24-hour)
-  const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
-  if (!timeRegex.test(cartData.preferred_time)) {
-    errors.push(`Invalid time format: "${cartData.preferred_time}" - should be HH:MM (24-hour format)`);
-  }
-
-  // Special requirements should be string or null
-  if (cartData.special_requirements !== null && 
-      cartData.special_requirements !== undefined && 
-      typeof cartData.special_requirements !== 'string') {
-    errors.push('Special requirements must be a string');
-  }
-
-  return errors;
-};
-
-  // Create datetime string helper
-  const createDateTime = (date, time) => {
-    try {
-      const dateStr = date.toISOString().split('T')[0];
-      return `${dateStr}T${time}:00`;
-    } catch (error) {
-      console.error('Error creating datetime:', error);
-      return null;
-    }
-  };
-
-  // API Functions
   const fetchServiceDetails = async () => {
     try {
       setLoading(true);
-      const response = await getPublicCategory(serviceId);
+      const response = await getCategoryById(serviceId);
+
+      console.log("Services Data");
+      console.log(response.data);
       
       if (response.data && response.data.success) {
         const categoryData = response.data.category;
@@ -255,6 +222,10 @@ const validateCartData = (cartData) => {
           name: categoryData.name,
           description: categoryData.description,
           price_per_hour: categoryData.price_per_hour,
+          price_per_day: categoryData.price_per_day,
+          price_per_week: categoryData.price_per_week,
+          price_per_month: categoryData.price_per_month,
+          price_full_time: categoryData.price_full_time,
         });
       } else {
         Alert.alert('Error', 'Failed to fetch service details');
@@ -268,7 +239,10 @@ const validateCartData = (cartData) => {
   };
 
   const calculateServicePrice = async () => {
-    if (!service) return;
+    if (!service || !service.id) {
+      console.log('Service not available for calculation');
+      return;
+    }
 
     try {
       setCalculatingPrice(true);
@@ -280,216 +254,131 @@ const validateCartData = (cartData) => {
         worker_count: Number(workerCount)
       };
 
-      console.log('Price calculation request:', requestBody);
+      console.log('Calculating price with:', requestBody);
       const response = await calculatePrice(requestBody);
       
-      if (response.data && response.data.success) {
-        setPriceCalculation(response.data.calculation);
-        console.log('Price calculation success:', response.data.calculation);
+      console.log('Full API response:', response);
+      
+      if (response.data && response.data.success && response.data.calculation) {
+        const calculation = response.data.calculation;
+        console.log('Setting price calculation:', calculation);
+        console.log('Total amount:', calculation.final_price);
+        
+        // Force state update with new object reference
+        setPriceCalculation({
+          category: calculation.category,
+          discount_amount: calculation.discount_amount,
+          discount_percentage: calculation.discount_percentage,
+          duration_type: calculation.duration_type,
+          duration_value: calculation.duration_value,
+          final_price: calculation.final_price,
+          subtotal: calculation.subtotal,
+          unit_price: calculation.unit_price,
+          worker_count: calculation.worker_count,
+          total_amount: calculation.final_price // Adding explicit total_amount
+        });
       } else {
-        console.error('Price calculation failed:', response);
+        console.error('Price calculation failed or no data:', response);
         setPriceCalculation(null);
       }
     } catch (err) {
       console.error('Error calculating price:', err);
-      console.error('Price calculation error response:', err.response?.data);
+      console.error('Error details:', err.response?.data);
       setPriceCalculation(null);
     } finally {
       setCalculatingPrice(false);
     }
   };
 
-  // Helper Functions
-  const calculateEndDate = () => {
-    if (!selectedDurationType || !durationValue) return;
-
-    const start = new Date(selectedDate);
-    let end = new Date(start);
-
-    switch (selectedDurationType) {
-      case 'hour':
-        end = new Date(start);
-        break;
-      case 'day':
-        end.setDate(start.getDate() + durationValue - 1);
-        break;
-      case 'week':
-        end.setDate(start.getDate() + (durationValue * 7) - 1);
-        break;
-      case 'month':
-        end.setMonth(start.getMonth() + durationValue);
-        end.setDate(start.getDate() - 1);
-        break;
-      case 'full_time':
-        end.setFullYear(start.getFullYear() + 1);
-        break;
+  const handleSubmit = async () => {
+    if (!priceCalculation) {
+      Alert.alert('Price Calculation', 'Please wait for price calculation to complete');
+      return;
     }
 
-    setEndDate(end);
-  };
+    try {
+      setAddingToCart(true);
 
-  const formatTimeDisplay = (time24) => {
-    const [hour, minute] = time24.split(':').map(Number);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-    return `${hour12}:${minute.toString().padStart(2, '0')} ${ampm}`;
-  };
-
-  // Event Handlers
-  const handleDurationTypeChange = (durationType, minValue) => {
-    console.log('Duration type changing from', selectedDurationType, 'to', durationType);
-    setSelectedDurationType(durationType);
-    setDurationValue(minValue);
-    console.log('Duration type state updated to:', durationType);
-  };
-
-  const updateWorkerCount = (increment = true) => {
-    setWorkerCount(prev => increment ? prev + 1 : Math.max(1, prev - 1));
-  };
-
-  const updateDuration = (increment = true) => {
-    const currentType = durationTypes.find(type => type.key === selectedDurationType);
-    const minValue = currentType?.minValue || 1;
-    const maxValue = currentType?.maxValue || 999;
-    
-    setDurationValue(prev => {
-      if (increment) {
-        return Math.min(maxValue, prev + 1);
+      const preferredDate = selectedDate.toISOString().split('T')[0];
+      
+      let cartData;
+      
+      if (editMode) {
+        cartData = {
+          worker_count: Number(workerCount),
+          duration_type: selectedDurationType,
+          duration_value: Number(durationValue),
+          preferred_date: preferredDate,
+          preferred_time: selectedTime,
+          special_requirements: null
+        };
       } else {
-        return Math.max(minValue, prev - 1);
+        cartData = {
+          category_id: Number(service.id),
+          worker_count: Number(workerCount),
+          duration_type: selectedDurationType,
+          duration_value: Number(durationValue),
+          preferred_date: preferredDate,
+          preferred_time: selectedTime,
+          special_requirements: null
+        };
       }
-    });
+
+      console.log('Submitting cart data:', cartData);
+
+      let response;
+      
+      if (editMode && cartItemId) {
+        response = await updateCartItem(cartItemId, cartData);
+      } else {
+        response = await addToCart(cartData);
+      }
+
+      if (response.data.success) {
+        showAlert({
+          type: ALERT_TYPES.SUCCESS,
+          title: editMode ? 'Item Updated! ✨' : 'Service Added! ✨',
+          message: editMode 
+            ? 'Your cart item has been successfully updated.' 
+            : 'Your service has been successfully added to cart.',
+          actions: [
+            {
+              text: 'View Cart',
+              style: 'primary',
+              onPress: () => {
+                navigation.navigate('Cart');
+              },
+            }
+          ],
+        });
+        
+        if (onAddToCart) {
+          onAddToCart(response.data.cart_item);
+        }
+        
+        onClose();
+      } else {
+        Alert.alert('Error', response.data.message || `Failed to ${editMode ? 'update' : 'add'} cart item`);
+      }
+    } catch (error) {
+      console.error(`Error ${editMode ? 'updating' : 'adding'} cart item:`, error);
+      
+      const errorMessage = error.response?.data?.message || 
+                          error.response?.data?.errors || 
+                          `Failed to ${editMode ? 'update' : 'add'} service. Please try again.`;
+      
+      Alert.alert('Error', typeof errorMessage === 'object' ? JSON.stringify(errorMessage) : errorMessage);
+    } finally {
+      setAddingToCart(false);
+    }
   };
 
-  // UPDATED: Handle both add and update operations with duration_type changes
-const handleSubmit = async () => {
-  if (!priceCalculation) {
-    Alert.alert('Price Calculation', 'Please wait for price calculation to complete');
-    return;
-  }
+  const changeMonth = (direction) => {
+    const newMonth = new Date(calendarMonth);
+    newMonth.setMonth(newMonth.getMonth() + direction);
+    setCalendarMonth(newMonth);
+  };
 
-  try {
-    setAddingToCart(true);
-
-    // Extract preferred date in YYYY-MM-DD format
-    const preferredDate = selectedDate.toISOString().split('T')[0];
-
-    // FIXED: Ensure time is properly formatted (HH:MM in 24-hour format)
-    const formattedTime = selectedTime.includes(':') ? selectedTime : `${selectedTime}:00`;
-    
-    // Validate time format before proceeding
-    const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
-    if (!timeRegex.test(formattedTime)) {
-      Alert.alert('Error', `Invalid time format: ${formattedTime}. Please select a valid time.`);
-      return;
-    }
-
-    // Debug log current state before preparing data
-    console.log('Current state values:', {
-      selectedDurationType,
-      workerCount,
-      durationValue,
-      preferredDate,
-      formattedTime,
-      specialRequirements
-    });
-
-    // Prepare cart data based on mode (add vs edit)
-    let cartData;
-    
-    if (editMode) {
-      // FOR UPDATE: Send all fields including duration_type (now changeable in edit mode)
-      cartData = {
-        worker_count: Number(workerCount),
-        duration_type: selectedDurationType,  // FIXED: Use current state value
-        duration_value: Number(durationValue),
-        preferred_date: preferredDate,
-        preferred_time: formattedTime,
-        special_requirements: specialRequirements.trim() || null
-      };
-    } else {
-      // FOR ADD: Send all required fields including category_id and duration_type
-      cartData = {
-        category_id: Number(service.id),
-        worker_count: Number(workerCount),
-        duration_type: selectedDurationType,
-        duration_value: Number(durationValue),
-        preferred_date: preferredDate,
-        preferred_time: formattedTime,
-        special_requirements: specialRequirements.trim() || null
-      };
-    }
-
-    // Additional debug log for cart data
-    console.log(`${editMode ? 'UPDATE' : 'ADD'} - Final cart data being sent:`, JSON.stringify(cartData, null, 2));
-    console.log('Selected Duration Type State:', selectedDurationType);
-
-    // Run validation before sending
-    const validationErrors = validateCartData(cartData);
-    if (validationErrors.length > 0) {
-      console.error('Validation errors:', validationErrors);
-      Alert.alert('Validation Error', validationErrors.join('\n'));
-      return;
-    }
-
-    let response;
-    
-    if (editMode && cartItemId) {
-      // UPDATE existing cart item
-      console.log(`Updating cart item ${cartItemId} with duration_type: ${cartData.duration_type}`);
-      response = await updateCartItem(cartItemId, cartData);
-    } else {
-      // ADD new cart item
-      response = await addToCart(cartData);
-    }
-
-    console.log('API Response:', response.data);
-
-    if (response.data.success) {
-      // Show appropriate success message
-      showAlert({
-        type: ALERT_TYPES.SUCCESS,
-        title: editMode ? 'Item Updated! ✨' : 'Service Added! ✨',
-        message: editMode 
-          ? 'Your cart item has been successfully updated.' 
-          : 'Your service has been successfully added to cart. Continue shopping or proceed to checkout.',
-        actions: [
-          {
-            text: 'View Cart',
-            style: 'primary',
-            onPress: () => {
-              navigation.navigate('Cart');
-            },
-          }
-        ],
-      });
-      
-      // Call parent callback if provided
-      if (onAddToCart) {
-        onAddToCart(response.data.cart_item);
-      }
-      
-      onClose();
-    } else {
-      console.error('API Error:', response.data);
-      Alert.alert('Error', response.data.message || `Failed to ${editMode ? 'update' : 'add'} cart item`);
-    }
-  } catch (error) {
-    console.error(`Error ${editMode ? 'updating' : 'adding'} cart item:`, error);
-    console.error('Error response:', error.response?.data);
-    
-    // Show more specific error message if available
-    const errorMessage = error.response?.data?.message || 
-                        error.response?.data?.errors || 
-                        `Failed to ${editMode ? 'update' : 'add'} service ${editMode ? 'in' : 'to'} cart. Please try again.`;
-    
-    Alert.alert('Error', typeof errorMessage === 'object' ? JSON.stringify(errorMessage) : errorMessage);
-  } finally {
-    setAddingToCart(false);
-  }
-};
-
-  // Loading state
   if (loading) {
     return (
       <Modal
@@ -512,6 +401,9 @@ const handleSubmit = async () => {
 
   if (!service) return null;
 
+  const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                      'July', 'August', 'September', 'October', 'November', 'December'];
+
   return (
     <Modal
       visible={visible}
@@ -523,281 +415,678 @@ const handleSubmit = async () => {
         <View style={styles.modalContainer}>
           {/* Header */}
           <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <Text style={styles.serviceTitle}>
-                {editMode ? `Edit ${service.name}` : service.name}
-              </Text>
+            <View>
+              <Text style={styles.serviceTitle}>{service.name}</Text>
+              <Text style={styles.serviceSubtitle}>Professional {service.name}</Text>
             </View>
             <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-              <Ionicons name="close" size={20} color="#666" />
+              <Text style={styles.closeButtonText}>✕</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Scrollable Content */}
-          <ScrollView
-            style={styles.content}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.scrollContent}
-          >
-            {/* Service Configuration Section */}
-            <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="settings-outline" size={16} color="#666" />
-                <Text style={styles.sectionTitle}>Service Configuration</Text>
+          <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+            {/* Top Stats */}
+            <View style={styles.statsContainer}>
+              <View style={styles.statBox}>
+                <Text style={styles.statValue}>8 hrs</Text>
+                <Text style={styles.statLabel}>estimated time</Text>
               </View>
-              
-              {/* Duration Type Selector - Now always interactive */}
-              <DurationTypeSelector
-                selectedDurationType={selectedDurationType}
-                onDurationTypeChange={handleDurationTypeChange}
-                durationValue={durationValue}
-              />
-
-              {/* Compact Controls */}
-              <View style={styles.compactControlsRow}>
-                <CounterControl
-                  icon="people-outline"
-                  label="Workers"
-                  value={workerCount}
-                  onIncrement={() => updateWorkerCount(true)}
-                  onDecrement={() => updateWorkerCount(false)}
-                />
-
-                <CounterControl
-                  icon="timer-outline"
-                  label={selectedDurationType.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                  value={durationValue}
-                  onIncrement={() => updateDuration(true)}
-                  onDecrement={() => updateDuration(false)}
-                  disabled={selectedDurationType === 'full_time'}
-                />
-
-                {/* Inline Price Display */}
-                <PriceDisplay
-                  priceCalculation={priceCalculation}
-                  calculatingPrice={calculatingPrice}
-                  compact={true}
-                />
+              <View style={styles.statBox}>
+                <Text style={styles.statValue}>Rs {service.price_per_hour}</Text>
+                <Text style={styles.statLabel}>starting price</Text>
+              </View>
+              <View style={styles.statBox}>
+                <Text style={styles.statValue}>4.8/5</Text>
+                <Text style={styles.statLabel}>rating</Text>
               </View>
             </View>
 
-            {/* Date & Time Selection */}
-            <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="calendar-outline" size={16} color="#666" />
-                <Text style={styles.sectionTitle}>Schedule</Text>
-              </View>
-              
-              <View style={styles.dateTimeContainer}>
-                {/* Calendar Component */}
-                <CompactCalendar
-                  selectedDate={selectedDate}
-                  onDateSelect={setSelectedDate}
-                  endDate={endDate}
-                />
+            {/* Duration Options */}
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.durationContainer}
+            >
+              {durationOptions.map((option) => (
+                <TouchableOpacity
+                  key={option.key}
+                  style={[
+                    styles.durationOption,
+                    selectedDurationType === option.durationType && 
+                    durationValue === option.value && 
+                    styles.durationOptionActive
+                  ]}
+                  onPress={() => {
+                    setSelectedDurationType(option.durationType);
+                    setDurationValue(option.value);
+                  }}
+                >
+                  <Text style={styles.durationLabel}>{option.label}</Text>
+                  <Text style={styles.durationPrice}>{option.price}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
 
-                {/* Time Picker Component */}
-                <TimePicker
-                  selectedTime={selectedTime}
-                  onTimeSelect={setSelectedTime}
-                />
+            {/* Controls Row */}
+            <View style={styles.controlsRow}>
+              {/* Partners */}
+              <View style={styles.controlBox}>
+                <View style={styles.controlHeader}>
+                  <Ionicons name="people-outline" size={16} color="#000" />
+                  <Text style={styles.controlLabel}>Partners</Text>
+                </View>
+                <View style={styles.counterContainer}>
+                  <TouchableOpacity 
+                    style={styles.counterButton}
+                    onPress={() => setWorkerCount(Math.max(1, workerCount - 1))}
+                  >
+                    <Text style={styles.counterButtonText}>-</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.counterValue}>{workerCount}</Text>
+                  <TouchableOpacity 
+                    style={styles.counterButton}
+                    onPress={() => setWorkerCount(workerCount + 1)}
+                  >
+                    <Text style={styles.counterButtonText}>+</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              {/* Selected Date Display */}
-              <View style={styles.selectedDateDisplay}>
-                <Ionicons name="checkmark-circle-outline" size={16} color="#0066cc" />
-                <Text style={styles.selectedDateText}>
-                  {selectedDate.toLocaleDateString()} at {formatTimeDisplay(selectedTime)}
+              {/* Hour/Duration */}
+              <View style={styles.controlBox}>
+                <View style={styles.controlHeader}>
+                  <Ionicons name="time-outline" size={16} color="#000" />
+                  <Text style={styles.controlLabel}>
+                    {selectedDurationType === 'hour' ? 'Hour' : 
+                     selectedDurationType === 'day' ? 'Days' : 
+                     selectedDurationType === 'week' ? 'Week' : 
+                     selectedDurationType === 'month' ? 'Month' : 'Duration'}
+                  </Text>
+                </View>
+                <View style={styles.counterContainer}>
+                  <TouchableOpacity 
+                    style={styles.counterButton}
+                    onPress={() => setDurationValue(Math.max(1, durationValue - 1))}
+                  >
+                    <Text style={styles.counterButtonText}>-</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.counterValue}>{durationValue}</Text>
+                  <TouchableOpacity 
+                    style={styles.counterButton}
+                    onPress={() => setDurationValue(durationValue + 1)}
+                  >
+                    <Text style={styles.counterButtonText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Timing */}
+              <View style={styles.controlBox}>
+                <Text style={styles.controlLabel}>Timing</Text>
+                <TouchableOpacity 
+                  style={styles.timeSelector}
+                  onPress={() => setShowTimeModal(true)}
+                >
+                  <Text style={styles.timeValue}>
+                    {parseInt(selectedTime.split(':')[0]) > 11 
+                      ? `${parseInt(selectedTime.split(':')[0]) === 12 ? 12 : parseInt(selectedTime.split(':')[0]) - 12} pm`
+                      : `${parseInt(selectedTime.split(':')[0]) === 0 ? 12 : parseInt(selectedTime.split(':')[0])} am`}
+                  </Text>
+                  <Text style={styles.timeSelectorIcon}>∨</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Calendar */}
+            <View style={styles.calendarContainer}>
+              <View style={styles.calendarHeader}>
+                <Text style={styles.calendarMonth}>
+                  {monthNames[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
                 </Text>
+                <View style={styles.calendarNav}>
+                  <TouchableOpacity onPress={() => changeMonth(-1)}>
+                    <Text style={styles.navArrow}>‹</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => changeMonth(1)}>
+                    <Text style={styles.navArrow}>›</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.weekDays}>
+                {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
+                  <Text key={day} style={styles.weekDay}>{day}</Text>
+                ))}
+              </View>
+
+              <View style={styles.calendarGrid}>
+                {calendarDays.map((day, index) => {
+                  const isInRange = () => {
+                    if (selectedDurationType === 'hour') {
+                      return day.date.getDate() === selectedDate.getDate() &&
+                             day.date.getMonth() === selectedDate.getMonth() &&
+                             day.date.getFullYear() === selectedDate.getFullYear();
+                    }
+                    
+                    const startDate = new Date(selectedDate);
+                    startDate.setHours(0, 0, 0, 0);
+                    
+                    let endDate = new Date(selectedDate);
+                    
+                    if (selectedDurationType === 'day') {
+                      endDate.setDate(endDate.getDate() + durationValue - 1);
+                    } else if (selectedDurationType === 'week') {
+                      endDate.setDate(endDate.getDate() + (durationValue * 7) - 1);
+                    } else if (selectedDurationType === 'month') {
+                      endDate.setMonth(endDate.getMonth() + durationValue);
+                      endDate.setDate(endDate.getDate() - 1);
+                    }
+                    
+                    endDate.setHours(23, 59, 59, 999);
+                    
+                    const currentDay = new Date(day.date);
+                    currentDay.setHours(12, 0, 0, 0);
+                    
+                    return currentDay >= startDate && currentDay <= endDate;
+                  };
+                  
+                  const isSelected = isInRange();
+                  const isStartDate = day.date.getDate() === selectedDate.getDate() &&
+                    day.date.getMonth() === selectedDate.getMonth() &&
+                    day.date.getFullYear() === selectedDate.getFullYear();
+                  
+                  return (
+                    <TouchableOpacity
+                      key={index}
+                      style={[
+                        styles.calendarDay,
+                        !day.isCurrentMonth && styles.calendarDayInactive,
+                        isSelected && styles.calendarDaySelected,
+                        isStartDate && styles.calendarDayStart
+                      ]}
+                      onPress={() => {
+                        setSelectedDate(new Date(day.date));
+                        setCalendarMonth(new Date(day.date));
+                      }}
+                      disabled={!day.isCurrentMonth}
+                    >
+                      <Text style={[
+                        styles.calendarDayText,
+                        !day.isCurrentMonth && styles.calendarDayTextInactive,
+                        isSelected && styles.calendarDayTextSelected
+                      ]}>
+                        {day.date.getDate()}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
-
-            {/* Special Requirements */}
-            <SpecialRequirementsInput
-              value={specialRequirements}
-              onChangeText={setSpecialRequirements}
-            />
           </ScrollView>
 
-          {/* Bottom Action */}
+          {/* Bottom Section */}
           <View style={styles.bottomSection}>
-            <PriceDisplay
-              priceCalculation={priceCalculation}
-              calculatingPrice={calculatingPrice}
-            />
-            
+            <View style={styles.totalContainer}>
+              <Text style={styles.totalLabel}>Total</Text>
+              <Text style={styles.totalValue}>
+                {calculatingPrice ? (
+                  'Calculating...'
+                ) : priceCalculation ? (
+                  `Rs ${priceCalculation.final_price || priceCalculation.total_amount || 0}`
+                ) : (
+                  'Rs 0'
+                )}
+              </Text>
+              {priceCalculation && priceCalculation.final_price > 0 && (
+                <Text style={styles.totalSubtext}>
+                  {durationValue} {selectedDurationType}(s) × {workerCount} worker(s)
+                </Text>
+              )}
+            </View>
             <TouchableOpacity 
-              style={[
-                styles.submitButton, 
-                (!priceCalculation || addingToCart) && styles.disabledButton
-              ]}
+              style={[styles.checkoutButton, (!priceCalculation || addingToCart) && styles.checkoutButtonDisabled]}
               onPress={handleSubmit}
               disabled={!priceCalculation || addingToCart}
             >
               {addingToCart ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
-                <>
-                  <Ionicons 
-                    name={editMode ? "checkmark-outline" : "bag-add-outline"} 
-                    size={16} 
-                    color="#fff" 
-                    style={styles.submitIcon} 
-                  />
-                  <Text style={styles.submitText}>
-                    {editMode ? 'Update Cart' : 'Add to Cart'}
-                  </Text>
-                </>
+                <Text style={styles.checkoutButtonText}>
+                  {editMode ? 'update' : 'check out'}
+                </Text>
               )}
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Time Picker Modal */}
+        <Modal
+          visible={showTimeModal}
+          animationType="fade"
+          transparent={true}
+          onRequestClose={() => setShowTimeModal(false)}
+        >
+          <TouchableOpacity 
+            style={styles.timeModalBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowTimeModal(false)}
+          >
+            <View style={styles.timeModalContainer} onStartShouldSetResponder={() => true}>
+              <View style={styles.timeModalHeader}>
+                <Text style={styles.timeModalTitle}>Select Time</Text>
+                <TouchableOpacity onPress={() => setShowTimeModal(false)}>
+                  <Text style={styles.timeModalClose}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              
+              <ScrollView style={styles.timeModalScroll}>
+                {timeOptions.map((time) => {
+                  const hour = parseInt(time.split(':')[0]);
+                  const displayTime = hour > 11 
+                    ? `${hour === 12 ? 12 : hour - 12}:00 PM`
+                    : `${hour === 0 ? 12 : hour}:00 AM`;
+                  
+                  return (
+                    <TouchableOpacity
+                      key={time}
+                      style={[
+                        styles.timeOption,
+                        selectedTime === time && styles.timeOptionSelected
+                      ]}
+                      onPress={() => {
+                        setSelectedTime(time);
+                        setShowTimeModal(false);
+                      }}
+                    >
+                      <Text style={[
+                        styles.timeOptionText,
+                        selectedTime === time && styles.timeOptionTextSelected
+                      ]}>
+                        {displayTime}
+                      </Text>
+                      {selectedTime === time && (
+                        <Ionicons name="checkmark" size={20} color="#000" />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </TouchableOpacity>
+        </Modal>
       </View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  modalBackdrop: { 
-    flex: 1, 
-    backgroundColor: 'rgba(0,0,0,0.5)', 
-    justifyContent: 'flex-end' 
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end'
   },
-  modalContainer: { 
-    backgroundColor: '#fff', 
-    borderTopLeftRadius: 20, 
-    borderTopRightRadius: 20, 
-    height: height * 0.85,
-    maxHeight: height * 0.85
+  modalContainer: {
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    height: height * 0.9,
+    maxHeight: height * 0.9
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  loadingText: {
+    marginTop: 10,
+    color: '#666',
+    fontSize: 16
   },
   
   // Header
-  header: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    paddingHorizontal: 20, 
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0'
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center'
-  },
-  headerIcon: {
-    marginRight: 8
-  },
-  serviceTitle: { 
-    fontSize: 20, 
-    fontWeight: 'bold', 
-    color: '#000'
-  },
-  closeButton: { 
-    width: 32, 
-    height: 32, 
-    borderRadius: 16, 
-    backgroundColor: '#f5f5f5', 
-    justifyContent: 'center', 
-    alignItems: 'center'
-  },
-  
-  // Content
-  content: { flex: 1 },
-  scrollContent: { paddingBottom: 10 },
-  
-  // Loading
-  loadingContainer: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center' 
-  },
-  loadingText: { 
-    marginTop: 10, 
-    color: '#666', 
-    fontSize: 16 
-  },
-
-  // Section Container
-  sectionContainer: {
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0'
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#000',
-    marginLeft: 6
-  },
-
-  // Compact Controls Row
-  compactControlsRow: {
+  header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    padding: 20,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0'
+  },
+  serviceTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 4
+  },
+  serviceSubtitle: {
+    fontSize: 14,
+    color: '#666'
+  },
+  closeButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f5f5f5',
+    justifyContent: 'center',
     alignItems: 'center'
   },
-
-  // Date Time Container
-  dateTimeContainer: {
+  closeButtonText: {
+    fontSize: 18,
+    color: '#666'
+  },
+  
+  scrollView: {
+    flex: 1
+  },
+  
+  // Stats
+  statsContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0'
+  },
+  statBox: {
+    alignItems: 'center'
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 4
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#666'
+  },
+  
+  // Duration Options
+  durationContainer: {
+    paddingHorizontal: 15,
+    paddingVertical: 10
+  },
+  durationOption: {
+    backgroundColor: '#EFEFF0',
+    borderRadius: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 0,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#f8f8f8',
+    marginRight: 5,
+    minWidth: 95
+  },
+  durationOptionActive: {
+    backgroundColor: '#fff',
+    borderColor: '#000'
+  },
+  durationLabel: {
+    fontSize: 12,
+    color: '#000',
+    marginBottom: 4,
+    fontWeight: '500',
+    whiteSpace: 'nowrap'
+  },
+  durationPrice: {
+    fontSize: 11,
+    color: '#666',
+    whiteSpace: 'nowrap'
+  },
+  
+  // Controls Row
+  controlsRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    gap: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0'
+  },
+  controlBox: {
+    flex: 1
+  },
+  controlHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 5,
+    gap: 4
+  },
+  controlLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#000'
+  },
+  counterContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8f8f8',
+    borderRadius: 8,
+    padding: 8
+  },
+  counterButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  counterButtonText: {
+    fontSize: 18,
+    color: '#000',
+    fontWeight: '500'
+  },
+  counterValue: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#000'
+  },
+  timeSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#f8f8f8',
+    borderRadius: 8,
+    padding: 10
+  },
+  timeValue: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#000'
+  },
+  timeSelectorIcon: {
+    fontSize: 16,
+    color: '#666'
+  },
+  
+  // Calendar
+  calendarContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 5
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20
+  },
+  calendarMonth: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#000'
+  },
+  calendarNav: {
     flexDirection: 'row',
     gap: 15
   },
-
-  // Selected Date Display
-  selectedDateDisplay: {
-    marginTop: 12,
-    padding: 10,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  selectedDateText: {
-    fontSize: 13,
+  navArrow: {
+    fontSize: 28,
     color: '#0066cc',
-    fontWeight: '500',
-    marginLeft: 6
+    fontWeight: 'bold'
   },
-
+  weekDays: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 15
+  },
+  weekDay: {
+    width: width / 8,
+    textAlign: 'center',
+    fontSize: 13,
+    color: '#999',
+    fontWeight: '500'
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap'
+  },
+  calendarDay: {
+    width: width / 7.5,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8
+  },
+  calendarDayInactive: {
+    opacity: 0.3
+  },
+  calendarDaySelected: {
+    backgroundColor: '#000',
+    borderRadius: 8
+  },
+  calendarDayStart: {
+    backgroundColor: '#000',
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#0066cc'
+  },
+  calendarDayText: {
+    fontSize: 16,
+    color: '#000',
+    fontWeight: '500'
+  },
+  calendarDayTextInactive: {
+    color: '#ccc'
+  },
+  calendarDayTextSelected: {
+    color: '#fff',
+    fontWeight: 'bold'
+  },
+  
   // Bottom Section
   bottomSection: {
-    backgroundColor: '#fff',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 15,
     borderTopWidth: 1,
     borderTopColor: '#f0f0f0',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    backgroundColor: '#fff'
+  },
+  totalContainer: {
+    flex: 1,
+    backgroundColor: '#f8f8f8',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginRight: 15
+  },
+  totalLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#000',
+    textAlign: 'center',
+    marginBottom: 4
+  },
+  totalValue: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#000',
+    textAlign: 'center'
+  },
+  totalSubtext: {
+    fontSize: 11,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 2
+  },
+  checkoutButton: {
+    backgroundColor: '#000',
+    borderRadius: 25,
+    paddingVertical: 18,
+    paddingHorizontal: 40,
+    minWidth: 140,
+    justifyContent: 'center',
     alignItems: 'center'
   },
-  submitButton: {
-    backgroundColor: '#000',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 20,
-    minWidth: 120,
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'center'
-  },
-  disabledButton: {
+  checkoutButtonDisabled: {
     opacity: 0.5
   },
-  submitIcon: {
-    marginRight: 6
-  },
-  submitText: {
+  checkoutButtonText: {
     color: '#fff',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600'
+  },
+  
+  // Time Modal
+  timeModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  timeModalContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    width: width * 0.85,
+    maxHeight: height * 0.7,
+    overflow: 'hidden'
+  },
+  timeModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0'
+  },
+  timeModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#000'
+  },
+  timeModalClose: {
+    fontSize: 24,
+    color: '#666',
+    fontWeight: '300'
+  },
+  timeModalScroll: {
+    maxHeight: height * 0.5
+  },
+  timeOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f5f5f5'
+  },
+  timeOptionSelected: {
+    backgroundColor: '#f8f8f8'
+  },
+  timeOptionText: {
+    fontSize: 16,
+    color: '#000',
+    fontWeight: '500'
+  },
+  timeOptionTextSelected: {
+    fontWeight: '700',
+    color: '#000'
   }
 });
 

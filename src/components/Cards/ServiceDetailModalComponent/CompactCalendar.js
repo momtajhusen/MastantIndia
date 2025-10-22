@@ -6,7 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 const CompactCalendar = ({ 
   selectedDate, 
   onDateSelect, 
-  endDate = null 
+  endDate = null
 }) => {
   const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
   const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
@@ -16,7 +16,7 @@ const CompactCalendar = ({
   const getDaysInMonth = (year, month) => {
     const date = new Date(year, month, 1);
     const days = [];
-    const firstDay = (date.getDay() + 6) % 7; // Monday=0
+    const firstDay = (date.getDay() + 6) % 7;
     const daysInMonth = new Date(year, month + 1, 0).getDate();
 
     // Previous month days

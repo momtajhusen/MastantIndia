@@ -11,7 +11,7 @@ import {
   RefreshControl,
   Alert 
 } from 'react-native';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';  
 import { rw , rh } from '../../../constants/responsive';
 import { useNavigation } from '@react-navigation/native';

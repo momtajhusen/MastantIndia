@@ -29,43 +29,35 @@ const LoginScreen = ({ navigation }) => {
     const [validationMessage, setValidationMessage] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
-    useEffect(() => {
-        const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (event) => {
-            // Position perfect hai 0 par, bas animation effect chahiye
-            const keyboardOffset = event.endCoordinates.height * 0; // 0 movement
-            
-            // Pehle thoda upar jaega, phir original position pe aayega - bounce effect
-            Animated.sequence([
-                Animated.timing(keyboardHeight, {
-                    duration: 150,
-                    toValue: -20, // Thoda sa upar
-                    easing: Easing.bezier(0.25, 0.46, 0.45, 0.94),
-                    useNativeDriver: false,
-                }),
-                Animated.timing(keyboardHeight, {
-                    duration: 200,
-                    toValue: keyboardOffset, // Original position (0)
-                    easing: Easing.bezier(0.25, 0.46, 0.45, 0.94),
-                    useNativeDriver: false,
-                })
-            ]).start();
-        });
+useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener('keyboardDidShow', (event) => {
+        // Keyboard ki height ke hisab se upar move karega
+        const keyboardOffset = -event.endCoordinates.height;
         
-        const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
-            // Hide करते समय भी smooth animation
-            Animated.timing(keyboardHeight, {
-                duration: 250,
-                toValue: 0, // Original position
-                easing: Easing.bezier(0.25, 0.46, 0.45, 0.94),
-                useNativeDriver: false,
-            }).start();
-        });
+        // Smooth animation ke sath upar jaega
+        Animated.timing(keyboardHeight, {
+            duration: 250,
+            toValue: keyboardOffset,
+            easing: Easing.bezier(0.25, 0.46, 0.45, 0.94),
+            useNativeDriver: false,
+        }).start();
+    });
+    
+    const keyboardDidHideListener = Keyboard.addListener('keyboardDidHide', () => {
+        // Keyboard hide hone par original position pe aayega
+        Animated.timing(keyboardHeight, {
+            duration: 250,
+            toValue: 0,
+            easing: Easing.bezier(0.25, 0.46, 0.45, 0.94),
+            useNativeDriver: false,
+        }).start();
+    });
 
-        return () => {
-            keyboardDidHideListener?.remove();
-            keyboardDidShowListener?.remove();
-        };
-    }, []);
+    return () => {
+        keyboardDidHideListener?.remove();
+        keyboardDidShowListener?.remove();
+    };
+}, []);
 
     // Phone number validation for Indian numbers
     const validatePhoneNumber = (number) => {
@@ -168,9 +160,9 @@ const LoginScreen = ({ navigation }) => {
                     
                     {/* Header Content */}
                     <View style={styles.headerContent}>
-                        <TouchableOpacity onPress={handleSkip} style={styles.skipButtonContainer}>
+                        {/* <TouchableOpacity onPress={handleSkip} style={styles.skipButtonContainer}>
                             <Text style={styles.skipButton}>skip</Text>
-                        </TouchableOpacity>
+                        </TouchableOpacity> */}
                         
                         <View style={[styles.brandContainer]}>
                             <Image

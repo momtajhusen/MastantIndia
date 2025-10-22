@@ -13,12 +13,16 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView
 } from 'react-native';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { createAddress } from "../../../services/address";
+import LocationPickerModal from '../../../components/LocationPickerModal';
 
 // create a component
 const AddAddressScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(false);
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [selectedAddress, setSelectedAddress] = useState('');
+  
   const [formData, setFormData] = useState({
     address_label: '',
     address_type: 'home',
@@ -55,6 +59,24 @@ const AddAddressScreen = ({ navigation }) => {
     }));
   };
 
+  // Handle location confirmation from modal
+  const handleLocationConfirm = (data) => {
+    const { location, address, locationData } = data;
+    
+    updateFormData('latitude', location.latitude.toFixed(6));
+    updateFormData('longitude', location.longitude.toFixed(6));
+    updateFormData('map_address', address);
+    setSelectedAddress(address);
+    
+    // Auto-fill address fields if available
+    if (locationData.country) updateFormData('country', locationData.country);
+    if (locationData.city) updateFormData('city', locationData.city);
+    if (locationData.state) updateFormData('state', locationData.state);
+    if (locationData.pincode) updateFormData('pincode', locationData.pincode);
+    
+    Alert.alert('Success', 'Location selected! Please verify and update address details as needed.');
+  };
+
   // Validate form data
   const validateForm = () => {
     const requiredFields = [
@@ -86,40 +108,6 @@ const AddAddressScreen = ({ navigation }) => {
     }
 
     return true;
-  };
-
-  // Get current location (mock implementation)
-  const getCurrentLocation = () => {
-    Alert.alert(
-      'Use Current Location',
-      'This will detect your GPS coordinates and auto-fill address details. Make sure GPS is enabled.',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel'
-        },
-        {
-          text: 'Get Location',
-          onPress: () => {
-            // Mock location detection with coordinates
-            const mockLatitude = 28.6139;
-            const mockLongitude = 77.2090;
-            
-            updateFormData('latitude', mockLatitude);
-            updateFormData('longitude', mockLongitude);
-            updateFormData('map_address', `${mockLatitude}, ${mockLongitude}`);
-            
-            // You can also mock auto-fill other fields
-            if (!formData.city) updateFormData('city', 'New Delhi');
-            if (!formData.state) updateFormData('state', 'Delhi');
-            if (!formData.pincode) updateFormData('pincode', '110001');
-            if (!formData.country) updateFormData('country', 'India');
-            
-            Alert.alert('Success', 'Location coordinates detected! Please verify and update address details as needed.');
-          }
-        }
-      ]
-    );
   };
 
   // Handle save address
@@ -236,6 +224,43 @@ const AddAddressScreen = ({ navigation }) => {
         {/* Address Type Selector */}
         {renderAddressTypeSelector()}
 
+        {/* Location Picker Button */}
+        <TouchableOpacity
+          style={styles.mapPickerButton}
+          onPress={() => setShowMapModal(true)}
+        >
+          <View style={styles.mapIconCircle}>
+            <Ionicons name="map-outline" size={24} color="#ffffff" />
+          </View>
+          <View style={styles.mapTextContainer}>
+            <Text style={styles.mapPickerTitle}>
+              {formData.latitude && formData.longitude
+                ? 'Location Selected'
+                : 'Select Location on Map'}
+            </Text>
+            <Text style={styles.mapPickerSubtitle}>
+              Address will be auto-filled
+            </Text>
+          </View>
+          <Ionicons name="navigate-outline" size={20} color="#000000" />
+        </TouchableOpacity>
+
+        {/* Selected Location Card */}
+        {formData.latitude && formData.longitude && selectedAddress && (
+          <View style={styles.selectedLocationCard}>
+            <View style={styles.locationPinHeader}>
+              <View style={styles.pinIconCircle}>
+                <Ionicons name="location" size={18} color="#000000" />
+              </View>
+              <Text style={styles.locationCardTitle}>Selected Location</Text>
+            </View>
+            <Text style={styles.locationAddress}>{selectedAddress}</Text>
+            <Text style={styles.coordinatesText}>
+              Lat: {formData.latitude}, Long: {formData.longitude}
+            </Text>
+          </View>
+        )}
+
         {/* House/Flat Number */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>House/Flat Number *</Text>
@@ -324,19 +349,13 @@ const AddAddressScreen = ({ navigation }) => {
           </View>
         </View>
 
-        {/* Location Button */}
-        <TouchableOpacity style={styles.locationButton} onPress={getCurrentLocation}>
-          <Ionicons name="location-outline" size={20} color="#000" />
-          <Text style={styles.locationText}>Use Current Location</Text>
-        </TouchableOpacity>
-
         {/* Contact Information Section */}
-        <View style={styles.sectionDivider}>
+        {/* <View style={styles.sectionDivider}>
           <Text style={styles.sectionTitle}>Contact Information</Text>
-        </View>
+        </View> */}
 
         {/* Contact Person */}
-        <View style={styles.inputGroup}>
+        {/* <View style={styles.inputGroup}>
           <Text style={styles.label}>Contact Person</Text>
           <TextInput
             style={styles.input}
@@ -345,10 +364,10 @@ const AddAddressScreen = ({ navigation }) => {
             placeholder="Person name for delivery"
             placeholderTextColor="#999"
           />
-        </View>
+        </View> */}
 
         {/* Contact Phone */}
-        <View style={styles.inputGroup}>
+        {/* <View style={styles.inputGroup}>
           <Text style={styles.label}>Contact Phone</Text>
           <TextInput
             style={styles.input}
@@ -359,10 +378,10 @@ const AddAddressScreen = ({ navigation }) => {
             keyboardType="phone-pad"
             maxLength={10}
           />
-        </View>
+        </View> */}
 
         {/* Delivery Instructions */}
-        <View style={styles.inputGroup}>
+        {/* <View style={styles.inputGroup}>
           <Text style={styles.label}>Delivery Instructions</Text>
           <TextInput
             style={[styles.input, styles.textArea]}
@@ -374,10 +393,10 @@ const AddAddressScreen = ({ navigation }) => {
             numberOfLines={3}
             textAlignVertical="top"
           />
-        </View>
+        </View> */}
 
         {/* Toggle Switches */}
-        <View style={styles.switchContainer}>
+        {/* <View style={styles.switchContainer}>
           <TouchableOpacity 
             style={styles.switchRow}
             onPress={() => updateFormData('is_active', !formData.is_active)}
@@ -397,7 +416,7 @@ const AddAddressScreen = ({ navigation }) => {
               <View style={[styles.switchThumb, formData.is_default && styles.switchThumbActive]} />
             </View>
           </TouchableOpacity>
-        </View>
+        </View> */}
 
         {/* Save Button */}
         <TouchableOpacity 
@@ -415,6 +434,22 @@ const AddAddressScreen = ({ navigation }) => {
           )}
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Location Picker Modal */}
+      <LocationPickerModal
+        visible={showMapModal}
+        onClose={() => setShowMapModal(false)}
+        onConfirm={handleLocationConfirm}
+        initialLocation={
+          formData.latitude && formData.longitude
+            ? {
+                latitude: parseFloat(formData.latitude),
+                longitude: parseFloat(formData.longitude),
+              }
+            : null
+        }
+        initialAddress={selectedAddress}
+      />
     </KeyboardAvoidingView>
   );
 };
@@ -514,22 +549,85 @@ const styles = StyleSheet.create({
   typeTextActive: {
     color: '#fff',
   },
-  locationButton: {
+  mapPickerButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#000000',
-    borderRadius: 8,
-    marginBottom: 10,
-    backgroundColor: '#FFFFFF',
+    borderColor: '#E0E0E0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  locationText: {
-    marginLeft: 8,
-    fontSize: 14,
+  mapIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#000000',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  mapTextContainer: {
+    flex: 1,
+  },
+  mapPickerTitle: {
     color: '#000000',
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  mapPickerSubtitle: {
+    color: '#666666',
+    fontSize: 13,
+  },
+  selectedLocationCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: '#000000',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  locationPinHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  pinIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#f0f0f0',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  locationCardTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#000000',
+  },
+  locationAddress: {
+    fontSize: 14,
+    color: '#333333',
+    lineHeight: 20,
+    marginBottom: 6,
+  },
+  coordinatesText: {
+    fontSize: 12,
+    color: '#666666',
+    fontStyle: 'italic',
   },
   sectionDivider: {
     marginVertical: 20,

@@ -3,35 +3,35 @@
     "name": "Mastant India",
     "slug": "mastant-india",
     "version": "1.0.0",
+    "runtimeVersion": "1.0.0",
     "orientation": "portrait",
     "icon": "./src/assets/images/Applogo.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
-    "owner": "momtajlife",
     "updates": {
-      "url": "https://u.expo.dev/457ec4cd-a631-4507-bee3-3076cffdae80",
+      "url": "https://u.expo.dev/8e908349-51fc-427e-bddd-721935f36909",
       "fallbackToCacheTimeout": 0
     },
     "android": {
       "package": "com.mastantindia",
-      "versionCode": 1
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.mastantindia"
     },
-    "extra": {
-      "eas": {
-        "projectId": "457ec4cd-a631-4507-bee3-3076cffdae80"
-      }
-    },
     "plugins": [
       "expo-font",
-      "expo-build-properties",
-      "expo-barcode-scanner"
+      "expo-asset"
     ],
-    "runtimeVersion": {
-      "policy": "appVersion"
-    }
+    "extra": {
+      "eas": {
+        "projectId": "8e908349-51fc-427e-bddd-721935f36909"
+      }
+    },
+    "owner": "technicalmaithili"
   }
 }

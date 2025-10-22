@@ -10,7 +10,7 @@ import {
   Share
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import Ionicons from 'react-native-vector-icons/Ionicons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context'; 
 import ServiceDetailModal from '../../../components/Cards/ServiceDetailModal';
 

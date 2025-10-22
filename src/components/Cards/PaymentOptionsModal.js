@@ -8,28 +8,30 @@ import {
   Dimensions,
   Animated,
   PanResponder,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import RazorpayCheckout from 'react-native-razorpay';
 
 const { width, height } = Dimensions.get('window');
 
 const PaymentOptionsModal = ({ 
   visible, 
   onClose, 
-  onOnlinePayment, 
   onCashPayment,
-  onWalletPayment,
-  totalAmount 
+  totalAmount,
+  userDetails = {}, // { name, email, contact }
+  razorpayKey = 'rzp_test_6DTE6DQT8QAGvW', // Replace with your key
+  orderId = null, // Optional: Your backend order ID (will be auto-generated if not provided)
+  onPaymentSuccess,
+  onPaymentError
 }) => {
   const [selectedOption, setSelectedOption] = useState(null);
   const [slideAnim] = useState(new Animated.Value(height));
 
-  // Initialize slide animation when modal becomes visible
   useEffect(() => {
     if (visible) {
-      // Reset selection when modal opens
       setSelectedOption(null);
-      // Smooth slide up animation
       Animated.timing(slideAnim, {
         toValue: 0,
         duration: 300,
@@ -38,7 +40,6 @@ const PaymentOptionsModal = ({
     }
   }, [visible, slideAnim]);
 
-  // Pan responder for swipe down to close
   const panResponder = PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: (_, gestureState) => {
@@ -51,10 +52,8 @@ const PaymentOptionsModal = ({
     },
     onPanResponderRelease: (_, gestureState) => {
       if (gestureState.dy > 150 || gestureState.vy > 0.5) {
-        // Close modal if swiped down enough
         closeModal();
       } else {
-        // Snap back to open position
         Animated.timing(slideAnim, {
           toValue: 0,
           duration: 200,
@@ -79,20 +78,42 @@ const PaymentOptionsModal = ({
     setSelectedOption(option);
   };
 
+// 🔹 Dummy Razorpay Payment Handler (no backend)
+const handleRazorpayPayment = async () => {
+  try {
+    const options = {
+      description: 'Payment for your order',
+      image: 'https://i.imgur.com/3g7nmJC.png',
+      currency: 'INR',
+      key: 'rzp_test_tPhc333asPKtv6',
+      amount: Number(totalAmount) * 100,  
+      name: 'Mastant India',
+      prefill: {
+        email: 'testuser@example.com',
+        contact: '9999999999',
+        name: 'Test User'
+      },
+      theme: { color: '#000000' },
+    };
+
+    const data = await RazorpayCheckout.open(options);
+    Alert.alert('✅ Payment Successful', `Payment ID: ${data.razorpay_payment_id}`);
+  } catch (error) {
+    console.log('Payment Error:', error);
+    Alert.alert('❌ Payment Failed', 'Something went wrong. Please try again.');
+  }
+};
+
   const handleProceed = () => {
     if (!selectedOption) return;
     
-    // Close modal first
     closeModal();
     
-    // Then trigger the appropriate payment method after a short delay
     setTimeout(() => {
       if (selectedOption === 'online') {
-        onOnlinePayment();
+        handleRazorpayPayment();
       } else if (selectedOption === 'cash') {
         onCashPayment();
-      } else if (selectedOption === 'wallet') {
-        onWalletPayment();
       }
     }, 300);
   };
@@ -105,14 +126,12 @@ const PaymentOptionsModal = ({
       onRequestClose={closeModal}
     >
       <View style={styles.modalOverlay}>
-        {/* Background overlay */}
         <TouchableOpacity 
           style={styles.modalBackground} 
           activeOpacity={1} 
           onPress={closeModal}
         />
         
-        {/* Animated bottom sheet */}
         <Animated.View 
           style={[
             styles.modalContainer,
@@ -122,10 +141,8 @@ const PaymentOptionsModal = ({
           ]}
           {...panResponder.panHandlers}
         >
-          {/* Drag Handle */}
           <View style={styles.dragHandle} />
 
-          {/* Header */}
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>Choose Payment Method</Text>
             <TouchableOpacity onPress={closeModal} style={styles.closeButton}>
@@ -133,13 +150,11 @@ const PaymentOptionsModal = ({
             </TouchableOpacity>
           </View>
 
-          {/* Amount Display */}
           <View style={styles.amountContainer}>
             <Text style={styles.amountLabel}>Total Amount</Text>
             <Text style={styles.amountValue}>₹{totalAmount}</Text>
           </View>
 
-          {/* Payment Options */}
           <View style={styles.optionsContainer}>
             {/* Online Payment Option */}
             <TouchableOpacity
@@ -167,41 +182,6 @@ const PaymentOptionsModal = ({
                   selectedOption === 'online' && styles.radioButtonSelected
                 ]}>
                   {selectedOption === 'online' && (
-                    <View style={styles.radioButtonInner} />
-                  )}
-                </View>
-              </View>
-            </TouchableOpacity>
-
-            {/* Wallet Payment Option */}
-            <TouchableOpacity
-              style={[
-                styles.paymentOption,
-                selectedOption === 'wallet' && styles.selectedOption
-              ]}
-              onPress={() => handleOptionSelect('wallet')}
-              activeOpacity={0.7}
-            >
-              <View style={styles.optionLeft}>
-                <View style={[styles.iconContainer, styles.walletIconContainer]}>
-                  <Ionicons name="wallet-outline" size={24} color="#000" />
-                </View>
-                <View style={styles.optionTextContainer}>
-                  <Text style={styles.optionTitle}>Wallet Payment</Text>
-                  <Text style={styles.optionSubtitle}>
-                    Pay using your digital wallet
-                  </Text>
-                  <View style={styles.walletBalance}>
-                    <Text style={styles.balanceText}>Balance: ₹2,450</Text>
-                  </View>
-                </View>
-              </View>
-              <View style={styles.optionRight}>
-                <View style={[
-                  styles.radioButton,
-                  selectedOption === 'wallet' && styles.radioButtonSelected
-                ]}>
-                  {selectedOption === 'wallet' && (
                     <View style={styles.radioButtonInner} />
                   )}
                 </View>
@@ -241,7 +221,6 @@ const PaymentOptionsModal = ({
             </TouchableOpacity>
           </View>
 
-          {/* Security Note */}
           <View style={styles.securityContainer}>
             <Ionicons name="shield-checkmark" size={16} color="#000" />
             <Text style={styles.securityText}>
@@ -249,7 +228,6 @@ const PaymentOptionsModal = ({
             </Text>
           </View>
 
-          {/* Action Buttons */}
           <View style={styles.buttonContainer}>
             <TouchableOpacity 
               style={styles.cancelButton}
@@ -379,7 +357,6 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#f0f0f0',
     backgroundColor: '#fff',
- 
   },
   selectedOption: {
     borderColor: '#000',
@@ -403,9 +380,6 @@ const styles = StyleSheet.create({
   onlineIconContainer: {
     backgroundColor: '#f5f5f5',
   },
-  walletIconContainer: {
-    backgroundColor: '#f5f5f5',
-  },
   cashIconContainer: {
     backgroundColor: '#f5f5f5',
   },
@@ -422,19 +396,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#666',
     lineHeight: 18,
-  },
-  walletBalance: {
-    marginTop: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    backgroundColor: '#f5f5f5',
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  balanceText: {
-    fontSize: 11,
-    color: '#000',
-    fontWeight: '600',
   },
   optionRight: {
     marginLeft: 10,

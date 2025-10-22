@@ -13,7 +13,7 @@ const DurationTypeSelector = ({
     { key: 'day', label: 'Daily', minValue: 1, maxValue: 30, icon: 'calendar-outline' },
     { key: 'week', label: 'Weekly', minValue: 1, maxValue: 12, icon: 'calendar-number-outline' },
     { key: 'month', label: 'Monthly', minValue: 1, maxValue: 12, icon: 'calendar' },
-    { key: 'full_time', label: 'Full Time', minValue: 1, maxValue: 1, icon: 'briefcase-outline' }
+    { key: 'full_time', label: 'Year', minValue: 1, maxValue: 1, icon: 'briefcase-outline' }
   ];
 
   const getCurrentDurationType = () => {

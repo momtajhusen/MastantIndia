@@ -2,7 +2,7 @@ import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const apiClient = axios.create({
-  baseURL: "http://192.168.1.68:8080/api",
+  baseURL: "https://mastantindia.scriptqube.com/api",
   timeout: 10000,
   headers: { "Content-Type": "application/json" },
 });

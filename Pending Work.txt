@@ -1,0 +1,42 @@
+
+==================================== Customer ====================================
+Auth 
+    1. Splash Screen me Logo ke Saath Name do 
+    2. login ke time yadi admin hai to login mat hone do 
+
+Services Details Modals
+    1. 15 days set karo servicesDetails Modals me 
+    2. add to cart karne se pah le check karo yadi already hai to dublicate nahi hone do 
+    3. us category ka rating fetch kar ke servicesDetails me rating me dikha o 
+    4. add services category dikha o 
+    5. checkout ke time me check karo us category ke worker hai ya nahi 
+
+Booking aur History
+    1. Active aur Upcoming ko fix karo 
+    2. Active ke time Rating kar paye custome -> partner 
+    3. History me bhi data aur designe figma ke tarah bana o 
+    4. History se details screen work 
+
+Reviews Screen 
+Notification 
+partner booking base on map   
+=====================================================================================
+
+
+==================================== Admin ====================================
+1. partner kyc
+2. finance manage 
+3. partner request withdrawal
+4. booking details and time line 
+5. Rating and Review 
+6. Role and perission 
+================================================================================
+
+==================================== Admin ====================================
+1. partner kyc
+2. finance manage 
+3. partner request withdrawal
+4. booking details and time line 
+5. Rating and Review 
+6. Role and perission 
+================================================================================

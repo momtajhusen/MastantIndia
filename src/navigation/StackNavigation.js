@@ -1,5 +1,5 @@
 //import liraries
-import React, { useContext } from 'react';
+import React from 'react';
 import CustomerBottomTabNavigator from './CustomerBottomTabNavigator';
 import SplashScreen from '../screens/Auth/SplashScreen';
 import LoginScreen from '../screens/Auth/LoginScreen';
@@ -13,39 +13,84 @@ import BookingDetailsScreen from '../screens/Customer/History/BookingDetailsScre
 import ProviderProfileDetails from '../screens/Customer/History/ProviderProfileDetails';
 import ActiveUpcomingServices from '../screens/Customer/History/ActiveUpcoming/ActiveUpcomingServces';
 import AddAddressScreen from '../screens/Customer/Profile/AddAddressScreen';
- 
 
-import { createSharedElementStackNavigator } from 'react-navigation-shared-element';
-const Stack = createSharedElementStackNavigator();
+import { createStackNavigator } from '@react-navigation/stack';
+const Stack = createStackNavigator();
 
 // create a component
 const StackNavigation = () => {
+  return (
+    <Stack.Navigator>
+      <Stack.Screen
+        name="SplashScreen"
+        component={SplashScreen}
+        options={{ headerShown: false, animation: 'fade' }}
+      />
 
-    return (
-        <Stack.Navigator> 
+      {/* Auth navigation  */}
+      <Stack.Screen
+        name="LoginScreen"
+        component={LoginScreen}
+        options={{ headerShown: false, animation: 'fade' }}
+      />
+      <Stack.Screen
+        name="OTPVerificationScreen"
+        component={OTPVerificationScreen}
+        options={{ headerShown: false, animation: 'fade' }}
+      />
 
-        <Stack.Screen name="SplashScreen" component={SplashScreen} options={{ headerShown: false, animation: 'fade' }} />
- 
-        {/* Auth navigation  */}
-        <Stack.Screen name="LoginScreen" component={LoginScreen} options={{ headerShown: false, animation: 'fade' }} />
-        <Stack.Screen name="OTPVerificationScreen" component={OTPVerificationScreen} options={{ headerShown: false, animation: 'fade' }} />
-
-        <Stack.Screen name="CustomerBottomTabNavigator" component={CustomerBottomTabNavigator} options={{ headerShown: false, animation: 'fade' }} />
-        <Stack.Screen name="AddressBookScreen" component={AddressBookScreen} options={{ headerShown: false, animation: 'fade' }} />
-        <Stack.Screen name="PaymentMethodScreen" component={PaymentMethodScreen} options={{ headerShown: false, animation: 'fade' }} />
-        <Stack.Screen name="RatingScreen" component={RatingScreen} options={{ headerShown: false, animation: 'fade' }} />
-        <Stack.Screen name="PrivacyPolicyScreen" component={PrivacyPolicyScreen} options={{ headerShown: false, animation: 'fade' }} />
-        <Stack.Screen name="AboutScreen" component={AboutScreen} options={{ headerShown: false, animation: 'fade' }} />
-        <Stack.Screen name="BookingDetailsScreen" component={BookingDetailsScreen} options={{ headerShown: false, animation: 'fade' }} />
-        <Stack.Screen name="ProviderProfileDetails" component={ProviderProfileDetails} options={{ headerShown: false, animation: 'fade' }} />
-        <Stack.Screen name="ActiveUpcomingServices" component={ActiveUpcomingServices} options={{ headerShown: false, animation: 'fade' }} />
-        <Stack.Screen name="AddAddressScreen" component={AddAddressScreen} options={{ headerShown: false, animation: 'fade' }} />
-
-
-
-
-     </Stack.Navigator>
-    );
+      <Stack.Screen
+        name="CustomerBottomTabNavigator"
+        component={CustomerBottomTabNavigator}
+        options={{ headerShown: false, animation: 'fade' }}
+      />
+      <Stack.Screen
+        name="AddressBookScreen"
+        component={AddressBookScreen}
+        options={{ headerShown: false, animation: 'fade' }}
+      />
+      <Stack.Screen
+        name="PaymentMethodScreen"
+        component={PaymentMethodScreen}
+        options={{ headerShown: false, animation: 'fade' }}
+      />
+      <Stack.Screen
+        name="RatingScreen"
+        component={RatingScreen}
+        options={{ headerShown: false, animation: 'fade' }}
+      />
+      <Stack.Screen
+        name="PrivacyPolicyScreen"
+        component={PrivacyPolicyScreen}
+        options={{ headerShown: false, animation: 'fade' }}
+      />
+      <Stack.Screen
+        name="AboutScreen"
+        component={AboutScreen}
+        options={{ headerShown: false, animation: 'fade' }}
+      />
+      <Stack.Screen
+        name="BookingDetailsScreen"
+        component={BookingDetailsScreen}
+        options={{ headerShown: false, animation: 'fade' }}
+      />
+      <Stack.Screen
+        name="ProviderProfileDetails"
+        component={ProviderProfileDetails}
+        options={{ headerShown: false, animation: 'fade' }}
+      />
+      <Stack.Screen
+        name="ActiveUpcomingServices"
+        component={ActiveUpcomingServices}
+        options={{ headerShown: false, animation: 'fade' }}
+      />
+      <Stack.Screen
+        name="AddAddressScreen"
+        component={AddAddressScreen}
+        options={{ headerShown: false, animation: 'fade' }}
+      />
+    </Stack.Navigator>
+  );
 };
 
 //make this component available to the app
