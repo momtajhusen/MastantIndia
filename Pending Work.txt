@@ -2,7 +2,7 @@
 ==================================== Customer ====================================
 Auth 
     1. Splash Screen me Logo ke Saath Name do 
-    2. login ke time yadi admin hai to login mat hone do 
+    ✅ 2. login ke time yadi admin hai to login mat hone do 
 
 Services Details Modals
     1. 15 days set karo servicesDetails Modals me 

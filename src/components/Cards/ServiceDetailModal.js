@@ -290,89 +290,137 @@ const ServiceDetailModal = ({
     }
   };
 
-  const handleSubmit = async () => {
-    if (!priceCalculation) {
-      Alert.alert('Price Calculation', 'Please wait for price calculation to complete');
-      return;
+const handleSubmit = async () => {
+  if (!priceCalculation) {
+    Alert.alert('Price Calculation', 'Please wait for price calculation to complete');
+    return;
+  }
+
+  try {
+    setAddingToCart(true);
+
+    const preferredDate = selectedDate.toISOString().split('T')[0];
+    
+    let cartData;
+    
+    if (editMode) {
+      cartData = {
+        worker_count: Number(workerCount),
+        duration_type: selectedDurationType,
+        duration_value: Number(durationValue),
+        preferred_date: preferredDate,
+        preferred_time: selectedTime,
+        special_requirements: null
+      };
+    } else {
+      cartData = {
+        category_id: Number(service.id),
+        worker_count: Number(workerCount),
+        duration_type: selectedDurationType,
+        duration_value: Number(durationValue),
+        preferred_date: preferredDate,
+        preferred_time: selectedTime,
+        special_requirements: null
+      };
     }
 
-    try {
-      setAddingToCart(true);
+    console.log('Submitting cart data:', cartData);
 
-      const preferredDate = selectedDate.toISOString().split('T')[0];
-      
-      let cartData;
-      
-      if (editMode) {
-        cartData = {
-          worker_count: Number(workerCount),
-          duration_type: selectedDurationType,
-          duration_value: Number(durationValue),
-          preferred_date: preferredDate,
-          preferred_time: selectedTime,
-          special_requirements: null
-        };
-      } else {
-        cartData = {
-          category_id: Number(service.id),
-          worker_count: Number(workerCount),
-          duration_type: selectedDurationType,
-          duration_value: Number(durationValue),
-          preferred_date: preferredDate,
-          preferred_time: selectedTime,
-          special_requirements: null
-        };
-      }
+    let response;
+    
+    if (editMode && cartItemId) {
+      response = await updateCartItem(cartItemId, cartData);
+    } else {
+      response = await addToCart(cartData);
+    }
 
-      console.log('Submitting cart data:', cartData);
-
-      let response;
-      
-      if (editMode && cartItemId) {
-        response = await updateCartItem(cartItemId, cartData);
-      } else {
-        response = await addToCart(cartData);
-      }
-
-      if (response.data.success) {
-        showAlert({
-          type: ALERT_TYPES.SUCCESS,
-          title: editMode ? 'Item Updated! ✨' : 'Service Added! ✨',
-          message: editMode 
-            ? 'Your cart item has been successfully updated.' 
-            : 'Your service has been successfully added to cart.',
-          actions: [
-            {
-              text: 'View Cart',
-              style: 'primary',
-              onPress: () => {
+    // SUCCESS CASE
+    if (response.data.success) {
+      showAlert({
+        type: ALERT_TYPES.SUCCESS,
+        title: editMode ? 'Item Updated! ✨' : 'Service Added! ✨',
+        message: editMode 
+          ? 'Your cart item has been successfully updated.' 
+          : 'Your service has been successfully added to cart.',
+        actions: [
+          {
+            text: 'View Cart',
+            style: 'primary',
+            onPress: () => {
+              onClose();
+              setTimeout(() => {
                 navigation.navigate('Cart');
-              },
-            }
-          ],
-        });
-        
-        if (onAddToCart) {
-          onAddToCart(response.data.cart_item);
-        }
-        
-        onClose();
-      } else {
-        Alert.alert('Error', response.data.message || `Failed to ${editMode ? 'update' : 'add'} cart item`);
+              }, 300);
+            },
+          },
+          {
+            text: 'Continue',
+            style: 'secondary',
+            onPress: () => {
+              onClose();
+            },
+          }
+        ],
+      });
+      
+      if (onAddToCart) {
+        onAddToCart(response.data.cart_item);
       }
-    } catch (error) {
-      console.error(`Error ${editMode ? 'updating' : 'adding'} cart item:`, error);
-      
-      const errorMessage = error.response?.data?.message || 
-                          error.response?.data?.errors || 
-                          `Failed to ${editMode ? 'update' : 'add'} service. Please try again.`;
-      
-      Alert.alert('Error', typeof errorMessage === 'object' ? JSON.stringify(errorMessage) : errorMessage);
-    } finally {
-      setAddingToCart(false);
     }
-  };
+  } catch (error) {
+    console.error('Error:', error);
+    
+    const errorStatus = error.response?.status;
+    const errorData = error.response?.data;
+    const errorMessage = errorData?.message || error.message || 'Something went wrong';
 
+    let errorTitle = 'Error';
+    let showViewCartButton = false;
+
+    // Check for duplicate item error
+    if (errorStatus === 409 || errorMessage?.includes('already exists in cart')) {
+      errorTitle = 'Already in Cart';
+      showViewCartButton = true;
+    } else if (errorStatus === 422) {
+      errorTitle = 'Validation Error';
+    } else if (errorStatus === 403) {
+      errorTitle = 'Access Denied';
+    } else if (!error.response) {
+      errorTitle = 'Network Error';
+    }
+
+    showAlert({
+      type: ALERT_TYPES.ERROR,
+      title: errorTitle,
+      message: errorMessage,
+      actions: showViewCartButton ? [
+        {
+          text: 'View Cart',
+          style: 'primary',
+          onPress: () => {
+            onClose();
+            setTimeout(() => {
+              navigation.navigate('Cart');
+            }, 300);
+          },
+        },
+        {
+          text: 'OK',
+          style: 'secondary',
+          onPress: () => {},
+        }
+      ] : [
+        {
+          text: 'OK',
+          style: 'primary',
+          onPress: () => {},
+        }
+      ],
+    });
+  } finally {
+    setAddingToCart(false);
+  }
+};
   const changeMonth = (direction) => {
     const newMonth = new Date(calendarMonth);
     newMonth.setMonth(newMonth.getMonth() + direction);

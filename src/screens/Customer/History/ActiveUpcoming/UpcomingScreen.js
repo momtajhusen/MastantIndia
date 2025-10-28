@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   ScrollView,
@@ -9,158 +9,367 @@ import {
   Image,
   Modal,
   ActivityIndicator,
+  Alert,
+  Platform,
 } from 'react-native';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as Haptics from 'expo-haptics';
+import { useNavigation } from '@react-navigation/native';
 import { getManufacturerBookings } from '../../../../services/bookings';
+import { scanQrCode } from '../../../../services/qrCode';
+import { useAlert, ALERT_TYPES } from '../../../../components/AlertProvider';
 
 const UpcomingScreen = () => {
+  const navigation = useNavigation();
   const [bookings, setBookings] = useState([]);
-  const [filteredWorkers, setFilteredWorkers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedTimeFilter, setSelectedTimeFilter] = useState('instant');
   const [categories, setCategories] = useState([]);
+  const [categoryWorkers, setCategoryWorkers] = useState([]);
+  const [selectedWorker, setSelectedWorker] = useState(null);
   const [timeFilters] = useState([
     { id: 'instant', name: 'instant' },
     { id: 'custom_days', name: 'custom days' },
     { id: '15_days', name: '15 days' },
     { id: '1_month', name: '1 month' },
   ]);
+
+  // QR Scanner Modal States
   const [showScanner, setShowScanner] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [scanError, setScanError] = useState(null);
+  const [permission, requestPermission] = useCameraPermissions();
+  const cameraRef = useRef(null);
+  const { showAlert } = useAlert();
 
-  // Generate categories from API response data
+  // Request camera permissions
+  const requestCameraPermission = async () => {
+    const { status } = await requestPermission();
+    if (status !== 'granted') {
+      showAlert({
+        type: ALERT_TYPES.ERROR,
+        title: 'Permission Denied',
+        message: 'Camera permission is required to scan QR codes',
+      });
+      return false;
+    }
+    return true;
+  };
+
+  // Handle barcode scanned
+  const handleBarcodeScanned = async (event) => {
+    if (scanning) return; // Prevent multiple scans
+    
+    const { data } = event;
+    console.log('QR Code Scanned:', data);
+    
+    // Haptic feedback
+    try {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (err) {
+      console.log('Haptics error:', err);
+    }
+    
+    await processScannedQR(data);
+  };
+
+  // Process scanned QR code
+  const processScannedQR = async (qrCode) => {
+    if (!selectedWorker) {
+      setScanError('Invalid worker data');
+      return;
+    }
+
+    setScanning(true);
+    setScanError(null);
+
+    try {
+      const currentStatus = selectedWorker.bookingStatus?.toLowerCase();
+      const action = currentStatus === 'confirmed' ? 'checkin' : 'checkout';
+
+      console.log('Processing QR Code:', {
+        qrCode,
+        action,
+        bookingId: selectedWorker.bookingId,
+        bookingStatus: currentStatus,
+        workerName: selectedWorker.name,
+      });
+
+      const payload = {
+        qr_code: qrCode,
+        action: action,
+        booking_id: selectedWorker.bookingId,
+      };
+
+      const result = await scanQrCode(payload);
+
+      if (result?.data?.success || result?.success) {
+        const isCheckin = action === 'checkin';
+        const responseData = result.data || result;
+
+        const workerName = responseData?.worker_name || selectedWorker.name;
+        const checkinTime = responseData?.checkin_time;
+        const checkoutTime = responseData?.checkout_time;
+        const totalHours = responseData?.total_hours || 'N/A';
+        const regularHours = responseData?.regular_hours || '0';
+        const overtimeHours = responseData?.overtime_hours || '0';
+
+        let timeDisplay = '';
+        if (isCheckin && checkinTime) {
+          timeDisplay = new Date(checkinTime).toLocaleTimeString();
+        } else if (!isCheckin && checkoutTime) {
+          timeDisplay = new Date(checkoutTime).toLocaleTimeString();
+        }
+
+        const successMessage = isCheckin
+          ? `✓ ${workerName}\nChecked in at ${timeDisplay}`
+          : `✓ ${workerName}\nChecked out at ${timeDisplay}\n\nTotal: ${totalHours}h\nRegular: ${regularHours}h | OT: ${overtimeHours}h`;
+
+        showAlert({
+          type: ALERT_TYPES.SUCCESS,
+          title: isCheckin ? 'Check-In Successful' : 'Check-Out Successful',
+          message: successMessage,
+        });
+
+        setShowScanner(false);
+        setScanning(false);
+        
+        // Navigate to Active tab after successful checkin/checkout
+        setTimeout(() => {
+          navigation.navigate('ActiveUpcomingServices', { 
+            initialTab: 'Active' 
+          });
+        }, 1000);
+      } else {
+        const errorMessage =
+          result?.data?.message || result?.message || 'QR scan failed';
+        setScanError(errorMessage);
+        setScanning(false);
+      }
+    } catch (error) {
+      console.error('QR scan error:', error);
+
+      let errorMessage = 'Failed to process QR code';
+
+      if (error?.response?.status === 404) {
+        errorMessage = 'QR code not found or expired';
+      } else if (error?.response?.status === 403) {
+        errorMessage = 'Access denied for this booking';
+      } else if (error?.response?.status === 400) {
+        errorMessage =
+          error?.response?.data?.message ||
+          'Invalid QR code status for this action';
+      } else if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error?.response?.data?.errors) {
+        const errors = error.response.data.errors;
+        errorMessage = Object.values(errors).flat().join(', ');
+      } else if (error?.message) {
+        errorMessage = error.message;
+      }
+
+      setScanError(errorMessage);
+      setScanning(false);
+    }
+  };
+
+  // Generate categories from bookings
   const generateCategories = (bookings) => {
     const categorySet = new Set();
 
     bookings.forEach((booking) => {
-      booking.booking_workers.forEach((worker) => {
+      booking.booking_workers?.forEach((worker) => {
         if (worker.category?.name) {
           categorySet.add(worker.category.name);
         }
       });
     });
 
-    const categoriesArray = [{ id: 'all', name: 'All' }];
-
-    Array.from(categorySet).forEach((categoryName) => {
-      categoriesArray.push({
-        id: categoryName.toLowerCase().replace(/\s+/g, '_'),
-        name: categoryName,
-      });
-    });
+    const categoriesArray = Array.from(categorySet).map((categoryName) => ({
+      id: categoryName.toLowerCase().replace(/\s+/g, '_'),
+      name: categoryName,
+    }));
 
     return categoriesArray;
   };
 
-  // Filter workers based on selected category and time filter
-  const filterWorkers = () => {
-    let workers = [];
+  // Get workers for selected category
+  const getWorkersForCategory = () => {
+    if (!selectedCategory) {
+      setCategoryWorkers([]);
+      return;
+    }
+
+    const workers = [];
 
     bookings.forEach((booking) => {
-      booking.booking_workers.forEach((worker) => {
-        // Category filter
+      booking.booking_workers?.forEach((w) => {
         const categoryMatch =
-          selectedCategory === 'all' ||
-          worker.category?.name.toLowerCase().replace(/\s+/g, '_') === selectedCategory;
+          w.category?.name?.toLowerCase().replace(/\s+/g, '_') ===
+          selectedCategory;
 
-        // Time filter - you can add duration field in your worker data
-        const timeMatch = selectedTimeFilter === 'instant'; // Modify based on your data structure
-
-        if (categoryMatch && timeMatch) {
+        // Sirf 'confirmed' status ke workers dikha (in_progress nahi)
+        const bookingStatus = booking.status?.toLowerCase() || 'confirmed';
+        
+        if (categoryMatch && bookingStatus === 'confirmed') {
           workers.push({
-            id: worker.id,
-            name: worker.worker?.name || worker.name || 'Worker Name',
-            workerId: worker.worker?.id || worker.id,
-            category: worker.category?.name || 'Category',
-            profile_image: worker.worker?.profile_picture || worker.profile_picture,
-            rating: worker.worker?.rating || worker.rating || '0.0',
-            phone: worker.worker?.phone || worker.phone,
+            id: w.id,
+            workerId: w.worker?.id || w.id,
+            name: w.worker?.name || 'Worker',
+            category: w.category?.name || 'Category',
+            profile_image: w.worker?.profile_picture,
+            rating: w.worker?.rating || '0.0',
+            phone: w.worker?.phone,
             duration: selectedTimeFilter.replace(/_/g, ' '),
             bookingId: booking.id,
             bookingDate: booking.booking_date,
-            bookingStatus: booking.status,
+            bookingStatus: bookingStatus,
+            qrCode: w.qr_code || booking.qr_code || 'DEMO_QR_CODE',
+            qrCheckinId: w.qr_checkin_id,
+            workerData: w,
+            bookingData: booking,
           });
         }
       });
     });
 
-    setFilteredWorkers(workers);
+    setCategoryWorkers(workers);
+
+    if (workers.length > 0 && !selectedWorker) {
+      setSelectedWorker(workers[0]);
+    } else if (workers.length === 0) {
+      setSelectedWorker(null);
+    }
   };
 
   // Load bookings from API
   const loadBookings = async () => {
     setLoading(true);
     try {
-      console.log('Loading bookings from API...');
       const response = await getManufacturerBookings();
 
       if (response.data?.success && response.data?.bookings?.data) {
         const allBookings = response.data.bookings.data;
-        const confirmedBookings = allBookings.filter(
-          (booking) => booking.status?.toLowerCase() === 'confirmed'
-        );
+        
+        const activeBookings = allBookings.filter((booking) => {
+          const status = booking.status?.toLowerCase();
+          return status === 'confirmed' || status === 'in_progress';
+        });
 
-        console.log('Confirmed bookings loaded:', confirmedBookings.length);
+        setBookings(activeBookings);
 
-        setBookings(confirmedBookings);
-
-        // Generate categories from actual API data
-        const generatedCategories = generateCategories(confirmedBookings);
+        const generatedCategories = generateCategories(activeBookings);
         setCategories(generatedCategories);
+
+        if (generatedCategories.length > 0 && !selectedCategory) {
+          setSelectedCategory(generatedCategories[0].id);
+        }
       } else {
-        console.error('Invalid API response structure:', response);
         setBookings([]);
-        setCategories([{ id: 'all', name: 'All' }]);
+        setCategories([]);
+        setSelectedCategory(null);
       }
     } catch (error) {
       console.error('Error loading bookings:', error);
+      showAlert({
+        type: ALERT_TYPES.ERROR,
+        title: 'Error',
+        message: 'Failed to load bookings',
+      });
       setBookings([]);
-      setCategories([{ id: 'all', name: 'All' }]);
+      setCategories([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Handle refresh
+  // Refresh bookings
   const handleRefresh = async () => {
-    console.log('Refreshing bookings...');
     setRefreshing(true);
     await loadBookings();
     setRefreshing(false);
   };
 
-  // Handle QR Scan
-  const handleScanQR = () => {
-    setShowScanner(true);
-    setScanning(true);
-
-    // Simulate QR scanning - Replace with actual QR scanner implementation
-    setTimeout(() => {
-      setScanning(false);
-      setShowScanner(false);
-      
-      if (filteredWorkers.length > 0) {
-        const worker = filteredWorkers[0];
-        alert(
-          `QR Scanned!\nWorker: ${worker.name}\nService Started Successfully!`
-        );
-        // Add your service start logic here
-      }
-    }, 2000);
+  // Select worker
+  const handleWorkerSelect = (worker) => {
+    setSelectedWorker(worker);
+    setScanError(null);
   };
 
-  // Load bookings on mount
+  // Open scanner modal
+  const openScanner = async () => {
+    if (!selectedWorker) {
+      showAlert({
+        type: ALERT_TYPES.ERROR,
+        title: 'Error',
+        message: 'Please select a worker first',
+      });
+      return;
+    }
+
+    const hasPermission = await requestCameraPermission();
+    if (!hasPermission) return;
+
+    setShowScanner(true);
+    setScanError(null);
+  };
+
+  // Manual QR entry
+  const handleManualQREntry = () => {
+    Alert.prompt(
+      'Enter QR Code',
+      `Paste the QR code value for ${selectedWorker?.name}:`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Submit',
+          onPress: (value) => {
+            if (value?.trim()) {
+              console.log('Manual QR Entry:', {
+                value: value.trim(),
+                worker: selectedWorker?.name,
+              });
+              processScannedQR(value.trim());
+            } else {
+              setScanError('Please enter a valid QR code');
+            }
+          },
+        },
+      ],
+      'plain-text'
+    );
+  };
+
+  // Close scanner
+  const closeScanner = () => {
+    setShowScanner(false);
+    setScanning(false);
+    setScanError(null);
+  };
+
+  // Change category
+  const handleCategoryChange = (categoryId) => {
+    setSelectedCategory(categoryId);
+    setSelectedWorker(null);
+  };
+
+  // Initial load
   useEffect(() => {
     loadBookings();
   }, []);
 
-  // Filter workers when filters change
+  // Update workers when category/filter changes
   useEffect(() => {
-    if (bookings.length > 0) {
-      filterWorkers();
+    if (bookings.length > 0 && selectedCategory) {
+      getWorkersForCategory();
     }
   }, [selectedCategory, selectedTimeFilter, bookings]);
+
+  if (!permission) {
+    return <View style={styles.container} />;
+  }
 
   return (
     <View style={styles.container}>
@@ -171,12 +380,11 @@ const UpcomingScreen = () => {
             refreshing={refreshing}
             onRefresh={handleRefresh}
             colors={['#000000']}
-            tintColor="#000000"
           />
         }
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Category Section */}
+        {/* Category Filter */}
         <View style={styles.categorySection}>
           <ScrollView
             horizontal
@@ -186,7 +394,7 @@ const UpcomingScreen = () => {
             {categories.map((cat) => (
               <TouchableOpacity
                 key={cat.id}
-                onPress={() => setSelectedCategory(cat.id)}
+                onPress={() => handleCategoryChange(cat.id)}
                 style={[
                   styles.categoryButton,
                   selectedCategory === cat.id && styles.categoryButtonActive,
@@ -205,7 +413,7 @@ const UpcomingScreen = () => {
           </ScrollView>
         </View>
 
-        {/* Time Filter Section */}
+        {/* Time Filter */}
         <View style={styles.timeFilterSection}>
           <ScrollView
             horizontal
@@ -218,13 +426,15 @@ const UpcomingScreen = () => {
                 onPress={() => setSelectedTimeFilter(filter.id)}
                 style={[
                   styles.timeFilterButton,
-                  selectedTimeFilter === filter.id && styles.timeFilterButtonActive,
+                  selectedTimeFilter === filter.id &&
+                    styles.timeFilterButtonActive,
                 ]}
               >
                 <Text
                   style={[
                     styles.timeFilterText,
-                    selectedTimeFilter === filter.id && styles.timeFilterTextActive,
+                    selectedTimeFilter === filter.id &&
+                      styles.timeFilterTextActive,
                   ]}
                 >
                   {filter.name}
@@ -238,10 +448,31 @@ const UpcomingScreen = () => {
         <View style={styles.workersSection}>
           {loading ? (
             <ActivityIndicator size="large" color="#000" style={styles.loader} />
-          ) : filteredWorkers.length > 0 ? (
-            filteredWorkers.map((worker, index) => (
-              <View key={`${worker.id}-${index}`} style={styles.workerCard}>
-                {/* Worker Image */}
+          ) : bookings.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <Text style={styles.emptyIcon}>📋</Text>
+              <Text style={styles.emptyText}>No Upcoming Bookings</Text>
+              <Text style={styles.emptySubText}>
+                New bookings will appear here
+              </Text>
+            </View>
+          ) : categoryWorkers.length > 0 ? (
+            categoryWorkers.map((worker, index) => (
+              <TouchableOpacity
+                key={`${worker.id}-${index}`}
+                style={[
+                  styles.workerCard,
+                  selectedWorker?.id === worker.id && styles.workerCardSelected,
+                ]}
+                onPress={() => handleWorkerSelect(worker)}
+                activeOpacity={0.7}
+              >
+                {selectedWorker?.id === worker.id && (
+                  <View style={styles.selectionIndicator}>
+                    <Text style={styles.selectionCheckmark}>✓</Text>
+                  </View>
+                )}
+
                 <View style={styles.workerImageContainer}>
                   {worker.profile_image ? (
                     <Image
@@ -251,34 +482,46 @@ const UpcomingScreen = () => {
                   ) : (
                     <View style={styles.workerImagePlaceholder}>
                       <Text style={styles.workerImageText}>
-                        {worker.name?.charAt(0) || 'W'}
+                        {worker.name?.charAt(0)?.toUpperCase() || 'W'}
                       </Text>
                     </View>
                   )}
                 </View>
 
-                {/* Worker Details */}
                 <View style={styles.workerDetails}>
-                  <Text style={styles.workerName}>{worker.name || 'Worker'}</Text>
-                  <Text style={styles.workerId}>Id: {worker.id}</Text>
-                  <Text style={styles.workerDuration}>Duration: {worker.duration}</Text>
+                  <Text style={styles.workerName}>{worker.name}</Text>
+                  <Text style={styles.workerId}>ID: {worker.workerId}</Text>
+                  <Text style={styles.workerDuration}>
+                    Duration: {worker.duration}
+                  </Text>
+                  <View style={styles.statusBadge}>
+                    <Text
+                      style={[
+                        styles.statusText,
+                        {
+                          color:
+                            worker.bookingStatus === 'confirmed'
+                              ? '#059669'
+                              : '#f59e0b',
+                        },
+                      ]}
+                    >
+                      {worker.bookingStatus === 'confirmed'
+                        ? '● Ready'
+                        : '● In Progress'}
+                    </Text>
+                  </View>
                 </View>
 
-                {/* Rating */}
                 <View style={styles.ratingContainer}>
                   <Text style={styles.ratingIcon}>★</Text>
-                  <Text style={styles.ratingLabel}>ratings</Text>
-                  <Text style={styles.ratingValue}>
-                    {worker.rating || '4.5'}
-                  </Text>
+                  <Text style={styles.ratingValue}>{worker.rating}</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             ))
           ) : (
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>
-                No workers found for selected filters
-              </Text>
+              <Text style={styles.emptyText}>No workers found</Text>
             </View>
           )}
         </View>
@@ -286,54 +529,132 @@ const UpcomingScreen = () => {
         <View style={styles.bottomPadding} />
       </ScrollView>
 
-      {/* Scan QR Button - Fixed at Bottom */}
-      {filteredWorkers.length > 0 && (
+      {/* Bottom Action Button */}
+      {selectedWorker && (
         <View style={styles.buttonContainer}>
+          <View style={styles.selectedWorkerInfo}>
+            <Text style={styles.selectedWorkerText}>
+              {selectedWorker.name}
+            </Text>
+            <Text style={styles.selectedWorkerStatus}>
+              {selectedWorker.bookingStatus === 'confirmed'
+                ? 'Ready to Check-In'
+                : 'Ready to Check-Out'}
+            </Text>
+          </View>
           <TouchableOpacity
             style={styles.scanButton}
-            onPress={handleScanQR}
-            disabled={scanning}
+            onPress={openScanner}
+            activeOpacity={0.8}
           >
             <Text style={styles.scanButtonText}>
-              {scanning ? 'Scanning...' : 'Scan QR to start service'}
+              {selectedWorker.bookingStatus === 'confirmed'
+                ? '📷 Scan QR to Check-In'
+                : '📷 Scan QR to Check-Out'}
             </Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {/* QR Scanner Modal */}
+      {/* Scanner Modal - Expo Camera */}
       <Modal
         visible={showScanner}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowScanner(false)}
+        transparent={false}
+        animationType="slide"
+        onRequestClose={closeScanner}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Scan QR Code</Text>
-              <TouchableOpacity
-                onPress={() => setShowScanner(false)}
-                style={styles.closeButton}
+        <View style={styles.scannerContainer}>
+          {permission?.granted ? (
+            <>
+              <CameraView
+                ref={cameraRef}
+                style={styles.camera}
+                facing="back"
+                onBarcodeScanned={scanning ? undefined : handleBarcodeScanned}
+                barcodeScannerSettings={{
+                  barcodeTypes: ['qr'],
+                }}
               >
-                <Text style={styles.closeButtonText}>✕</Text>
+                {/* Scanner Overlay */}
+                <View style={styles.scannerOverlay}>
+                  <View style={styles.topMask} />
+                  
+                  <View style={styles.middleRow}>
+                    <View style={styles.sideMask} />
+                    
+                    <View style={styles.scanFrame}>
+                      <View style={styles.corner + ' ' + styles.topLeft} />
+                      <View style={styles.corner + ' ' + styles.topRight} />
+                      <View style={styles.corner + ' ' + styles.bottomLeft} />
+                      <View style={styles.corner + ' ' + styles.bottomRight} />
+                    </View>
+                    
+                    <View style={styles.sideMask} />
+                  </View>
+                  
+                  <View style={styles.bottomMask}>
+                    <Text style={styles.scanHintText}>
+                      Position QR code in frame
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Close Button */}
+                <TouchableOpacity
+                  onPress={closeScanner}
+                  style={styles.closeButton}
+                >
+                  <Text style={styles.closeButtonText}>✕</Text>
+                </TouchableOpacity>
+
+                {/* Manual Entry Button */}
+                <TouchableOpacity
+                  onPress={handleManualQREntry}
+                  style={styles.manualEntryButton}
+                >
+                  <Text style={styles.manualEntryText}>📝 Manual Entry</Text>
+                </TouchableOpacity>
+              </CameraView>
+
+              {/* Error Banner */}
+              {scanError && (
+                <View style={styles.errorBanner}>
+                  <Text style={styles.errorText}>⚠ {scanError}</Text>
+                  <TouchableOpacity onPress={() => setScanError(null)}>
+                    <Text style={styles.errorDismiss}>Dismiss</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Scanning Indicator */}
+              {scanning && (
+                <View style={styles.scanningOverlay}>
+                  <View style={styles.scanningIndicator}>
+                    <ActivityIndicator size="large" color="#fff" />
+                    <Text style={styles.scanningText}>Processing...</Text>
+                  </View>
+                </View>
+              )}
+            </>
+          ) : (
+            <View style={styles.noPermissionContainer}>
+              <Text style={styles.noPermissionText}>
+                Camera permission is required
+              </Text>
+              <TouchableOpacity
+                onPress={requestCameraPermission}
+                style={styles.permissionButton}
+              >
+                <Text style={styles.permissionButtonText}>Grant Permission</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={closeScanner}
+                style={styles.cancelButton}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
             </View>
-
-            <View style={styles.scannerContainer}>
-              <View style={styles.scannerBox}>
-                {scanning ? (
-                  <ActivityIndicator size="large" color="#000" />
-                ) : (
-                  <Text style={styles.scannerText}>📷</Text>
-                )}
-              </View>
-            </View>
-
-            <Text style={styles.scannerInstruction}>
-              Position QR code within the frame
-            </Text>
-          </View>
+          )}
         </View>
       </Modal>
     </View>
@@ -346,9 +667,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F9FA',
   },
   scrollContent: {
-    paddingBottom: 100,
+    paddingBottom: 120,
   },
-  
+
   // Category Section
   categorySection: {
     backgroundColor: '#fff',
@@ -399,7 +720,6 @@ const styles = StyleSheet.create({
   },
   timeFilterButtonActive: {
     borderColor: '#111827',
-    backgroundColor: '#fff',
   },
   timeFilterText: {
     fontSize: 13,
@@ -421,13 +741,29 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
-    borderWidth: 1,
+    borderWidth: 2,
     borderColor: '#F3F4F6',
+    elevation: 2,
+  },
+  workerCardSelected: {
+    borderColor: '#111827',
+    backgroundColor: '#F9FAFB',
+  },
+  selectionIndicator: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#111827',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  selectionCheckmark: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: 'bold',
   },
   workerImageContainer: {
     marginRight: 16,
@@ -460,32 +796,35 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   workerId: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#6B7280',
     marginBottom: 4,
   },
   workerDuration: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#6B7280',
+    marginBottom: 6,
+  },
+  statusBadge: {
+    marginTop: 4,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   ratingContainer: {
     alignItems: 'center',
     marginLeft: 12,
   },
   ratingIcon: {
-    fontSize: 32,
+    fontSize: 24,
     color: '#111827',
-  },
-  ratingLabel: {
-    fontSize: 11,
-    color: '#374151',
-    fontWeight: '500',
-    marginTop: 2,
   },
   ratingValue: {
     fontSize: 11,
     color: '#6B7280',
     marginTop: 2,
+    fontWeight: '500',
   },
   loader: {
     marginTop: 40,
@@ -494,9 +833,20 @@ const styles = StyleSheet.create({
     paddingVertical: 60,
     alignItems: 'center',
   },
+  emptyIcon: {
+    fontSize: 60,
+    marginBottom: 16,
+  },
   emptyText: {
-    fontSize: 14,
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    marginBottom: 6,
+  },
+  emptySubText: {
+    fontSize: 13,
     color: '#6B7280',
+    textAlign: 'center',
   },
 
   // Bottom Button
@@ -509,83 +859,238 @@ const styles = StyleSheet.create({
     padding: 16,
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
+    elevation: 8,
+  },
+  selectedWorkerInfo: {
+    marginBottom: 12,
+  },
+  selectedWorkerText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#111827',
+    textAlign: 'center',
+  },
+  selectedWorkerStatus: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
+    marginTop: 2,
   },
   scanButton: {
     backgroundColor: '#111827',
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderRadius: 30,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   scanButtonText: {
     color: '#fff',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
   },
 
-  // Modal
-  modalOverlay: {
+  // Scanner Modal - Expo Camera
+  scannerContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.9)',
+    backgroundColor: '#000',
+  },
+  camera: {
+    flex: 1,
+  },
+  scannerOverlay: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+  topMask: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  middleRow: {
+    flexDirection: 'row',
+    height: 280,
+  },
+  sideMask: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+  },
+  scanFrame: {
+    width: 280,
+    height: 280,
+    borderWidth: 3,
+    borderColor: '#4ade80',
+    borderRadius: 20,
+    backgroundColor: 'rgba(74, 222, 128, 0.05)',
+    justifyContent: 'space-between',
+    padding: 10,
+  },
+  corner: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderColor: '#4ade80',
+    borderWidth: 3,
+  },
+  topLeft: {
+    top: 0,
+    left: 0,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
+  },
+  topRight: {
+    top: 0,
+    right: 0,
+    borderLeftWidth: 0,
+    borderBottomWidth: 0,
+  },
+  bottomLeft: {
+    bottom: 0,
+    left: 0,
+    borderRightWidth: 0,
+    borderTopWidth: 0,
+  },
+  bottomRight: {
+    bottom: 0,
+    right: 0,
+    borderLeftWidth: 0,
+    borderTopWidth: 0,
+  },
+  bottomMask: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
+    paddingBottom: 20,
   },
-  modalContent: {
+  scanHintText: {
+    color: '#fff',
+    fontSize: 14,
+    fontStyle: 'italic',
+    fontWeight: '500',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 20,
+    right: 20,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  closeButtonText: {
+    fontSize: 28,
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  manualEntryButton: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    right: 20,
     backgroundColor: '#fff',
-    borderRadius: 16,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
+    paddingVertical: 14,
+    borderRadius: 25,
+    alignItems: 'center',
+    zIndex: 10,
   },
-  modalHeader: {
+  manualEntryText: {
+    color: '#111827',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  errorBanner: {
+    position: 'absolute',
+    bottom: 100,
+    left: 20,
+    right: 20,
+    backgroundColor: '#FEE2E2',
+    borderLeftWidth: 4,
+    borderLeftColor: '#DC2626',
+    padding: 12,
+    borderRadius: 6,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 20,
+    zIndex: 10,
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#111827',
-  },
-  closeButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F3F4F6',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    fontSize: 18,
-    color: '#374151',
-  },
-  scannerContainer: {
-    aspectRatio: 1,
-    backgroundColor: '#F3F4F6',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  scannerBox: {
-    width: 200,
-    height: 200,
-    borderWidth: 4,
-    borderColor: '#111827',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  scannerText: {
-    fontSize: 64,
-  },
-  scannerInstruction: {
-    textAlign: 'center',
+  errorText: {
+    color: '#991B1B',
     fontSize: 13,
-    color: '#6B7280',
+    fontWeight: '500',
+    flex: 1,
   },
+  errorDismiss: {
+    color: '#DC2626',
+    fontWeight: '600',
+    fontSize: 12,
+    marginLeft: 8,
+  },
+  scanningOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  scanningIndicator: {
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    paddingVertical: 24,
+    paddingHorizontal: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  scanningText: {
+    color: '#fff',
+    marginTop: 12,
+    fontWeight: '600',
+  },
+  noPermissionContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    backgroundColor: '#000',
+  },
+  noPermissionText: {
+    fontSize: 18,
+    color: '#fff',
+    marginBottom: 24,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  permissionButton: {
+    backgroundColor: '#4ade80',
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 25,
+    marginBottom: 12,
+    width: '100%',
+    alignItems: 'center',
+  },
+  permissionButtonText: {
+    color: '#000',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  cancelButton: {
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingHorizontal: 32,
+    paddingVertical: 14,
+    borderRadius: 25,
+    width: '100%',
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+
   bottomPadding: {
     height: 20,
   },

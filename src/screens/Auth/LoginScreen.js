@@ -100,46 +100,57 @@ useEffect(() => {
         navigation.navigate('CustomerBottomTabNavigator');
     };
 
-    const handleGetVerificationCode = async () => {
+const handleGetVerificationCode = async () => {
     if (isValidNumber) {
         setIsLoading(true);
         setValidationMessage('');
 
         try {
-        // API call with correct payload
-        const res = await sendOtp({
-            mobile: phoneNumber,
-            purpose: "login"
-        });
-
-        console.log(res.data);
-        if (res.data?.success === true) {
-            // OTP send ho gaya to OTP screen pe navigate
-            navigation.navigate("OTPVerificationScreen", {
-            phoneNumber: phoneNumber,
-            otp: res.data?.otp,
-            expiresAt: res.data?.expires_at,
+            // API call with correct payload
+            const res = await sendOtp({
+                mobile: phoneNumber,
+                purpose: "login"
             });
-        } else {
-            setValidationMessage(res.data?.message || "Something went wrong");
-        }
+
+            console.log(res.data);
+
+            if (res.data?.success === true) {
+                const userRole = res.data?.role?.toLowerCase();
+
+                // ❌ Block admin and worker from login
+                if (userRole === "admin" || userRole === "worker") {
+                    setValidationMessage("Only manufacturers are allowed to login.");
+                    setIsLoading(false);
+                    return; // Stop here, no navigation
+                }
+
+                // ✅ Manufacturer allowed
+                navigation.navigate("OTPVerificationScreen", {
+                    phoneNumber: phoneNumber,
+                    otp: res.data?.otp,
+                    expiresAt: res.data?.expires_at,
+                });
+            } else {
+                setValidationMessage(res.data?.message || "Something went wrong");
+            }
 
         } catch (error) {
-        console.log("OTP request error:", error?.response?.data || error.message);
-        setValidationMessage("Failed to send OTP. Please try again.");
+            console.log("OTP request error:", error?.response?.data || error.message);
+            setValidationMessage("Failed to send OTP. Please try again.");
         } finally {
-        setIsLoading(false);
+            setIsLoading(false);
         }
     } else {
         if (phoneNumber.length === 0) {
-        setValidationMessage("Please enter your mobile number");
+            setValidationMessage("Please enter your mobile number");
         } else if (phoneNumber.length < 10) {
-        setValidationMessage("Please enter a valid 10-digit mobile number");
+            setValidationMessage("Please enter a valid 10-digit mobile number");
         } else {
-        setValidationMessage("Please enter a valid mobile number");
+            setValidationMessage("Please enter a valid mobile number");
         }
     }
-    };
+};
+
 
       
       
